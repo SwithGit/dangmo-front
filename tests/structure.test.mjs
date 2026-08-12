@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
+import test from "node:test";
+
+test("frontend owns UI and proxies API traffic", async () => {
+  await assert.rejects(access(new URL("../app/api", import.meta.url)));
+  const nextConfig = await readFile(new URL("../next.config.ts", import.meta.url), "utf8");
+  assert.match(nextConfig, /BACKEND_ORIGIN/);
+  assert.match(nextConfig, /\/api\/:path\*/);
+});
+
+test("frontend does not contain Cloudflare runtime bindings", async () => {
+  const files = [
+    "../app/page.tsx",
+    "../app/layout.tsx",
+    "../lib/analytics.ts",
+    "../lib/profile-options.ts",
+  ];
+  const source = (await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")))).join("\n");
+  assert.doesNotMatch(source, /cloudflare:workers|D1Database|R2Bucket/);
+});
