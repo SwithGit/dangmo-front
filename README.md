@@ -21,3 +21,5 @@ BACKEND_ORIGIN=https://api.dangmo.kr
 ```
 
 브라우저에서는 계속 `/api/...`를 호출하므로 프론트 코드에 백엔드 호스트를 노출하거나 CORS를 직접 다룰 필요가 없습니다.
+
+결제창은 `@portone/browser-sdk`의 PortOne V2 API를 사용합니다. Store ID와 채널 키는 EC2 백엔드가 주문 생성 응답으로 전달하며, API Secret과 Webhook Secret은 프론트/Vercel에 두지 않습니다.

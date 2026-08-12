@@ -3,6 +3,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
+import * as PortOne from "@portone/browser-sdk/v2";
 import { KSIC_DIVISIONS, REGION_OPTIONS, startupAge } from "../lib/profile-options";
 import { consumeLoginMethod, rememberLoginMethod, trackEvent, trackPageView } from "../lib/analytics";
 
@@ -439,120 +440,20 @@ type BillingPayload = {
   }>;
 };
 
-type TossCheckoutPayload = {
+type PortOneV2CheckoutPayload = {
   configured: true;
-  provider: "toss";
-  clientKey: string;
-  orderId: string;
-  orderName: string;
-  amount: number;
-  customerKey: string;
-  customerEmail: string;
-  customerName: string;
-  successUrl: string;
-  failUrl: string;
-};
-
-type PortOneV1CheckoutPayload = {
-  configured: true;
-  provider: "portone_v1";
-  storeCode: string;
+  provider: "portone_v2";
+  storeId: string;
   channelKey: string;
-  orderId: string;
+  paymentId: string;
   orderName: string;
   amount: number;
+  customerId: string;
   customerEmail: string;
   customerName: string;
-  returnUrl: string;
+  redirectUrl: string;
   webhookUrl: string;
 };
-
-type PortOneV1Response = {
-  success?: boolean;
-  imp_uid?: string;
-  merchant_uid?: string;
-  error_code?: string;
-  error_msg?: string;
-};
-
-type PortOneV1Sdk = {
-  init: (storeCode: string) => void;
-  request_pay: (input: {
-    channelKey: string;
-    pay_method: "card";
-    merchant_uid: string;
-    name: string;
-    amount: number;
-    buyer_email: string;
-    buyer_name: string;
-    m_redirect_url: string;
-    notice_url: string;
-  }, callback: (response: PortOneV1Response) => void) => void;
-};
-
-type TossPaymentsFactory = (clientKey: string) => {
-  payment: (input: { customerKey: string }) => {
-    requestPayment: (input: {
-      method: "CARD";
-      amount: { currency: "KRW"; value: number };
-      orderId: string;
-      orderName: string;
-      successUrl: string;
-      failUrl: string;
-      customerEmail: string;
-      customerName: string;
-    }) => Promise<void>;
-  };
-};
-
-let tossSdkPromise: Promise<TossPaymentsFactory> | null = null;
-let portOneV1SdkPromise: Promise<PortOneV1Sdk> | null = null;
-
-function loadPortOneV1Sdk() {
-  if (typeof window === "undefined") return Promise.reject(new Error("브라우저에서만 결제를 시작할 수 있습니다."));
-  const portOneWindow = window as typeof window & { IMP?: PortOneV1Sdk };
-  if (portOneWindow.IMP) return Promise.resolve(portOneWindow.IMP);
-  if (portOneV1SdkPromise) return portOneV1SdkPromise;
-  portOneV1SdkPromise = new Promise<PortOneV1Sdk>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-dangmo-portone-v1="true"]');
-    const script = existing ?? document.createElement("script");
-    const handleLoad = () => portOneWindow.IMP
-      ? resolve(portOneWindow.IMP)
-      : reject(new Error("PortOne V1 SDK를 불러오지 못했습니다."));
-    script.addEventListener("load", handleLoad, { once: true });
-    script.addEventListener("error", () => reject(new Error("PortOne 결제창 연결에 실패했습니다.")), { once: true });
-    if (!existing) {
-      script.src = "/api/billing/portone/v1/sdk";
-      script.async = true;
-      script.dataset.dangmoPortoneV1 = "true";
-      document.head.appendChild(script);
-    }
-  });
-  return portOneV1SdkPromise;
-}
-
-function loadTossPaymentsSdk() {
-  if (typeof window === "undefined") return Promise.reject(new Error("브라우저에서만 결제를 시작할 수 있습니다."));
-  const tossWindow = window as typeof window & { TossPayments?: TossPaymentsFactory };
-  if (tossWindow.TossPayments) return Promise.resolve(tossWindow.TossPayments);
-  if (tossSdkPromise) return tossSdkPromise;
-  tossSdkPromise = new Promise<TossPaymentsFactory>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-dangmo-toss="true"]');
-    const script = existing ?? document.createElement("script");
-    const handleLoad = () => tossWindow.TossPayments
-      ? resolve(tossWindow.TossPayments)
-      : reject(new Error("토스페이먼츠 SDK를 불러오지 못했습니다."));
-    script.addEventListener("load", handleLoad, { once: true });
-    script.addEventListener("error", () => reject(new Error("토스페이먼츠 결제창 연결에 실패했습니다.")), { once: true });
-    if (!existing) {
-      script.src = "https://js.tosspayments.com/v2/standard";
-      script.async = true;
-      script.dataset.dangmoToss = "true";
-      document.head.appendChild(script);
-    }
-  });
-  return tossSdkPromise;
-}
 
 type WorkspacePayload = {
   activeProjectId: string | null;
@@ -1249,75 +1150,32 @@ export default function Home() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paymentResult = params.get("payment");
-    if (paymentResult !== "portone-return" && paymentResult !== "success" && paymentResult !== "subscription-success" && paymentResult !== "fail") return;
+    if (paymentResult !== "portone-v2-return" && paymentResult !== "fail") return;
     let active = true;
     queueMicrotask(() => { if (active) setView("payment"); });
     const clearPaymentQuery = () => window.history.replaceState({}, "", window.location.pathname + window.location.hash);
 
-    if (paymentResult === "portone-return") {
-      const impUid = params.get("imp_uid");
-      const merchantUid = params.get("merchant_uid");
-      const success = params.get("imp_success");
-      if (success === "false" || !impUid || !merchantUid) {
-        queueMicrotask(() => { if (active) setActivity(params.get("error_msg") || "결제가 완료되지 않았습니다."); });
+    if (paymentResult === "portone-v2-return") {
+      const paymentId = params.get("paymentId");
+      const code = params.get("code");
+      if (!paymentId || code) {
+        queueMicrotask(() => { if (active) setActivity(params.get("message") || "결제가 완료되지 않았습니다."); });
         clearPaymentQuery();
         return;
       }
-      queueMicrotask(() => { if (active) setActivity("PortOne 결제 승인과 이용권·크레딧 반영을 확인하고 있어요…"); });
-      void fetch("/api/billing/portone/v1/confirm", {
+      queueMicrotask(() => { if (active) setActivity("PortOne 결제 승인과 이용권·크레딧 반영을 확인하고 있어요."); });
+      void fetch("/api/billing/portone/v2/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ impUid, merchantUid }),
+        body: JSON.stringify({ paymentId }),
       }).then((response) => responseJson<{ completed: boolean; billing: BillingPayload }>(response)).then((payload) => {
         if (!active) return;
         setBilling(payload.billing);
         setAiCredits(payload.billing.credits);
         setIsPro(payload.billing.plan === "pro");
-        setActivity(payload.completed
-          ? "결제가 완료되어 30일 이용권 또는 AI 크레딧이 반영됐습니다."
-          : "결제 승인은 확인됐고 계정에 반영하고 있습니다. 잠시 후 내역을 확인해주세요.");
+        setActivity("결제가 완료되어 30일 이용권 또는 AI 크레딧이 반영됐습니다.");
       }).catch((error) => {
-        if (active) setActivity(error instanceof Error ? error.message : "PortOne 결제 승인을 확인하지 못했습니다.");
-      }).finally(clearPaymentQuery);
-    } else if (paymentResult === "subscription-success") {
-      queueMicrotask(() => { if (active) setActivity("이전 결제와 이용권 상태를 확인하고 있어요…"); });
-      void fetch("/api/billing", { headers: { Accept: "application/json" } })
-        .then((response) => responseJson<BillingPayload>(response))
-        .then((payload) => {
-          if (!active) return;
-          setBilling(payload);
-          setAiCredits(payload.credits);
-          setIsPro(payload.plan === "pro");
-          setActivity(`${payload.plan === "pro" ? "Pro" : "Start"} 결제 상태를 확인했습니다.`);
-        })
-        .catch((error) => {
-          if (active) setActivity(error instanceof Error ? error.message : "구독 상태를 확인하지 못했습니다.");
-        })
-        .finally(clearPaymentQuery);
-    } else if (paymentResult === "success") {
-      const paymentKey = params.get("paymentKey");
-      const orderId = params.get("orderId");
-      const amount = Number(params.get("amount"));
-      if (!paymentKey || !orderId || !Number.isSafeInteger(amount)) {
-        queueMicrotask(() => { if (active) setActivity("결제 승인 정보가 올바르지 않습니다."); });
-        clearPaymentQuery();
-        return;
-      }
-      queueMicrotask(() => { if (active) setActivity("토스 결제 승인과 이용권·크레딧 반영을 확인하고 있어요…"); });
-      void fetch("/api/billing/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentKey, orderId, amount }),
-      }).then((response) => responseJson<{ completed: boolean; billing: BillingPayload }>(response)).then((payload) => {
-        if (!active) return;
-        setBilling(payload.billing);
-        setAiCredits(payload.billing.credits);
-        setIsPro(payload.billing.plan === "pro");
-        setActivity(payload.completed
-          ? `결제가 완료되어 30일 이용권 또는 AI 크레딧이 반영됐습니다. 현재 크레딧은 ${payload.billing.credits}개입니다.`
-          : "결제 승인은 확인됐고 이용권·크레딧을 반영하고 있습니다. 잠시 후 내역을 확인해주세요.");
-      }).catch((error) => {
-        if (active) setActivity(error instanceof Error ? error.message : "결제 승인을 확인하지 못했습니다.");
+        if (active) setActivity(error instanceof Error ? error.message : "PortOne 결제를 확인하지 못했습니다.");
       }).finally(clearPaymentQuery);
     } else {
       const orderId = params.get("orderId");
@@ -2640,63 +2498,49 @@ export default function Home() {
   const startCheckout = (productId: string) => runActivity("결제 준비", async () => {
     const payload = await responseJson<
       | { configured: false; message: string }
-      | PortOneV1CheckoutPayload
-      | TossCheckoutPayload
+      | PortOneV2CheckoutPayload
     >(await fetch("/api/billing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "checkout", productId }),
     }));
     if (!payload.configured) throw new Error(payload.message);
-    if (payload.provider === "portone_v1") {
-      const IMP = await loadPortOneV1Sdk();
-      IMP.init(payload.storeCode);
-      await new Promise<void>((resolve, reject) => {
-        IMP.request_pay({
-          channelKey: payload.channelKey,
-          pay_method: "card",
-          merchant_uid: payload.orderId,
-          name: payload.orderName,
-          amount: payload.amount,
-          buyer_email: payload.customerEmail,
-          buyer_name: payload.customerName,
-          m_redirect_url: payload.returnUrl,
-          notice_url: payload.webhookUrl,
-        }, (result) => {
-          if (result.error_code) {
-            reject(new Error(result.error_msg || `결제창 오류가 발생했습니다. (${result.error_code})`));
-            return;
-          }
-          if (!result.imp_uid || !result.merchant_uid) {
-            reject(new Error(result.error_msg || "결제가 완료되지 않았습니다."));
-            return;
-          }
-          void fetch("/api/billing/portone/v1/confirm", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ impUid: result.imp_uid, merchantUid: result.merchant_uid }),
-          }).then((response) => responseJson<{ completed: boolean; billing: BillingPayload }>(response)).then((confirmed) => {
-            setBilling(confirmed.billing);
-            setAiCredits(confirmed.billing.credits);
-            setIsPro(confirmed.billing.plan === "pro");
-            resolve();
-          }).catch(reject);
-        });
+    if (payload.provider === "portone_v2") {
+      const payment = await PortOne.requestPayment({
+        storeId: payload.storeId,
+        channelKey: payload.channelKey,
+        paymentId: payload.paymentId,
+        orderName: payload.orderName,
+        totalAmount: payload.amount,
+        currency: "KRW",
+        payMethod: "CARD",
+        customer: {
+          customerId: payload.customerId,
+          email: payload.customerEmail,
+          fullName: payload.customerName,
+        },
+        redirectUrl: payload.redirectUrl,
+        noticeUrls: [payload.webhookUrl],
       });
+      if (!payment) return;
+      if (payment.code) {
+        await fetch("/api/billing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "fail-checkout", orderId: payload.paymentId, code: payment.code, message: payment.message }),
+        });
+        throw new Error(payment.message || `결제창 오류가 발생했습니다. (${payment.code})`);
+      }
+      const confirmed = await responseJson<{ completed: boolean; billing: BillingPayload }>(await fetch("/api/billing/portone/v2/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId: payment.paymentId }),
+      }));
+      setBilling(confirmed.billing);
+      setAiCredits(confirmed.billing.credits);
+      setIsPro(confirmed.billing.plan === "pro");
       return;
     }
-    const TossPayments = await loadTossPaymentsSdk();
-    const payment = TossPayments(payload.clientKey).payment({ customerKey: payload.customerKey });
-    await payment.requestPayment({
-      method: "CARD",
-      amount: { currency: "KRW", value: payload.amount },
-      orderId: payload.orderId,
-      orderName: payload.orderName,
-      successUrl: payload.successUrl,
-      failUrl: payload.failUrl,
-      customerEmail: payload.customerEmail,
-      customerName: payload.customerName,
-    });
   });
 
   const redeemPromotionAction = (code: string) => runActivity("프로모션 크레딧 적용", async () => {
@@ -4406,7 +4250,7 @@ function PlanView({ billing, checkout, redeemPromotion, navigate }: { billing: B
       featured: false,
     },
   ] as const;
-  const providerName = billing.provider === "portone_v1" ? "PortOne" : billing.provider === "paddle" ? "Paddle" : "토스페이먼츠";
+  const providerName = "PortOne";
   const checkoutNote = billing.readiness.mode === "live-ready"
     ? `${providerName} 운영 결제가 연결되어 있습니다. Start·Pro는 자동결제가 아닌 수동 갱신형 30일 이용권이며, 만료 7일·3일·1일 전에 이메일로 안내합니다.`
     : billing.readiness.mode === "sandbox-ready"
@@ -4515,7 +4359,7 @@ function PaymentView({ billing, checkout, requestRefund, navigate }: { billing: 
   const [refundTarget, setRefundTarget] = useState<string | null>(null);
   const [refundReason, setRefundReason] = useState("");
   const creditProducts = billing.products.filter((product) => product.plan === null);
-  const providerName = billing.provider === "portone_v1" ? "PortOne" : billing.provider === "paddle" ? "Paddle" : "토스페이먼츠";
+  const providerName = "PortOne";
   const isLive = billing.readiness.mode === "live-ready";
   const isSandbox = billing.readiness.mode === "sandbox-ready";
   const checkoutDescription = isLive
@@ -4528,7 +4372,7 @@ function PaymentView({ billing, checkout, requestRefund, navigate }: { billing: 
   const checkoutBadge = isLive ? "운영 결제" : isSandbox ? "테스트 결제" : billing.readiness.mode === "key-mismatch" ? "점검 중" : "이용 불가";
   const refundableEvents = billing.history.filter((item) => item.status === "paid"
     && item.creditsDelta > 0
-    && ["toss", "paddle", "portone_v1"].includes(String(item.metadata.provider ?? "")));
+    && item.metadata.provider === "portone_v2");
   const refundRequestByEvent = new Map(billing.refundRequests.map((item) => [item.billingEventId, item]));
   const accessPassProduct = billing.accessPass
     ? billing.products.find((product) => product.plan === billing.accessPass?.plan)
