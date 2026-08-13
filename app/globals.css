@@ -2773,6 +2773,7 @@ a { color: inherit; text-decoration: none; }
 .dm-region-overview header > div, .dm-region-detail-map header > div, .dm-region-panel-head > div { min-width: 0; display: grid; gap: 5px; }
 .dm-region-detail-map header > div > button { width: fit-content; margin-bottom: 4px; padding: 0; border: 0; background: none; color: var(--dm-accent); font-size: 11px; font-weight: 800; cursor: pointer; }
 .dm-region-map-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(260px, .65fr); align-items: stretch; gap: 18px; }
+.dm-region-map-layout.dm-region-map-single { grid-template-columns: minmax(0, 1fr); }
 .dm-region-map-layout.is-list-only { grid-template-columns: 1fr; }
 .dm-region-map-layout.is-list-only .dm-administrative-map { display: none; }
 .dm-administrative-map { min-width: 0; min-height: 520px; padding: 12px; display: grid; align-content: center; border: 1px solid #dbe9e6; border-radius: 15px; background: radial-gradient(circle at 50% 42%, #f9fdfc, #eef6f4); }

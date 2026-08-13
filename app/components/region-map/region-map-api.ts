@@ -11,7 +11,7 @@ async function json<T>(response: Response): Promise<T> {
 }
 
 export async function loadRegions(parentCode?: string) {
-  const suffix = parentCode ? `?parentCode=${encodeURIComponent(parentCode)}` : "?scope=seoul-gyeonggi";
+  const suffix = parentCode ? `?parentCode=${encodeURIComponent(parentCode)}` : "?scope=nationwide";
   return json<RegionsPayload>(await fetch(`/api/regions${suffix}`, { headers: { Accept: "application/json" } }));
 }
 
@@ -26,4 +26,3 @@ export async function requestRegionInsight(regionCode: string, announcementId: s
     body: JSON.stringify({ announcementId, lookbackMonths: 12 }),
   }));
 }
-

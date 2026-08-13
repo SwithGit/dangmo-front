@@ -44,11 +44,21 @@ function levelClass(count: number) {
   return "is-level-1";
 }
 
-export function AdministrativeMap({ asset, regions, selectedCode, overview = false, onSelect }: {
+function shortRegionName(name: string) {
+  return ({
+    서울특별시: "서울", 부산광역시: "부산", 대구광역시: "대구", 인천광역시: "인천",
+    전남광주통합특별시: "전남·광주", 대전광역시: "대전", 울산광역시: "울산", 세종특별자치시: "세종",
+    경기도: "경기", 강원특별자치도: "강원", 충청북도: "충북", 충청남도: "충남",
+    경상북도: "경북", 경상남도: "경남", 제주특별자치도: "제주", 전북특별자치도: "전북",
+  } as Record<string, string>)[name] ?? name;
+}
+
+export function AdministrativeMap({ asset, regions, selectedCode, overview = false, aggregateRegion, onSelect }: {
   asset: string;
   regions: RegionSummary[];
   selectedCode: string;
   overview?: boolean;
+  aggregateRegion?: RegionSummary;
   onSelect: (region: RegionSummary) => void;
 }) {
   const [collection, setCollection] = useState<GeoFeatureCollection | null>(null);
@@ -64,15 +74,46 @@ export function AdministrativeMap({ asset, regions, selectedCode, overview = fal
     return () => { active = false; };
   }, [asset]);
 
-  const features = useMemo(() => collection ? prepare(collection) : [], [collection]);
+  const features = useMemo(() => {
+    if (!collection) return [];
+    if (!aggregateRegion) return prepare(collection);
+    const matching = collection.features.filter((feature) => feature.properties.regionCode === aggregateRegion.code);
+    return prepare(matching.length ? { ...collection, features: matching } : collection);
+  }, [aggregateRegion, collection]);
   const byCode = useMemo(() => new Map(regions.map((region) => [region.code, region])), [regions]);
+  const renderedFeatures = useMemo(() => overview ? [...features].sort((left, right) => {
+    const rank = (code: string) => code === "11" ? 2 : code === "41" ? 1 : 0;
+    return rank(left.code) - rank(right.code);
+  }) : features, [features, overview]);
+  const aggregateLabel = useMemo(() => features.length ? {
+    x: features.reduce((sum, feature) => sum + feature.x, 0) / features.length,
+    y: features.reduce((sum, feature) => sum + feature.y, 0) / features.length,
+  } : { x: 350, y: 320 }, [features]);
 
   if (error) return <div className="dm-region-map-state is-error" role="alert">{error}<small>아래 지역 목록으로 동일하게 탐색할 수 있습니다.</small></div>;
   if (!collection) return <div className="dm-region-map-state" role="status">행정경계 지도를 불러오는 중…</div>;
 
+  if (aggregateRegion) {
+    const count = aggregateRegion.regionalOpenCount;
+    return <div className="dm-administrative-map">
+      <svg viewBox="0 0 700 640" role="img" aria-label={`${aggregateRegion.name} 전체 지도, 지역 대상 모집 중 공고 ${count}건`}>
+        <g className={`dm-region-shape ${levelClass(count)} is-selected`} role="button" tabIndex={0}
+          aria-label={`${aggregateRegion.name}, 지역 대상 모집 중 공고 ${count}건`}
+          onClick={() => onSelect(aggregateRegion)}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(aggregateRegion); } }}>
+          {features.map((feature) => <path d={feature.path} vectorEffect="non-scaling-stroke" key={feature.code} />)}
+          <circle cx={aggregateLabel.x} cy={aggregateLabel.y} r={22} />
+          <text x={aggregateLabel.x} y={aggregateLabel.y - 2}>{shortRegionName(aggregateRegion.name)}</text>
+          <text className="dm-region-map-count" x={aggregateLabel.x} y={aggregateLabel.y + 15}>{count}건</text>
+        </g>
+      </svg>
+      <div className="dm-region-map-legend" aria-label="공고 수 색상 범례"><span><i className="is-level-1" />0건</span><span><i className="is-level-2" />1~2건</span><span><i className="is-level-3" />3~4건</span><span><i className="is-level-4" />5건 이상</span></div>
+    </div>;
+  }
+
   return <div className="dm-administrative-map">
-    <svg viewBox="0 0 700 640" role="img" aria-label={overview ? "대한민국 지도, 서울특별시와 경기도 선택 가능" : "선택 권역의 시군구별 모집 중 지원사업 지도"}>
-      {features.map((feature) => {
+    <svg viewBox="0 0 700 640" role="img" aria-label={overview ? "대한민국 지도, 전국 시·도 선택 가능" : "선택 권역의 시군별 모집 중 지원사업 지도"}>
+      {renderedFeatures.map((feature) => {
         const region = byCode.get(feature.code);
         const enabled = Boolean(region?.supported);
         const count = region?.regionalOpenCount ?? 0;
@@ -95,7 +136,7 @@ export function AdministrativeMap({ asset, regions, selectedCode, overview = fal
           {enabled ? <>
             {overview ? <line className="dm-region-leader" x1={feature.x} y1={feature.y} x2={labelX} y2={labelY} /> : null}
             <circle cx={labelX} cy={labelY} r={overview ? 24 : 13} />
-            <text x={labelX} y={labelY - (overview ? 2 : 0)}>{overview ? region!.name.replace("특별시", "").replace("기도", "기") : count}</text>
+            <text x={labelX} y={labelY - (overview ? 2 : 0)}>{overview ? shortRegionName(region!.name) : count}</text>
             {overview ? <text className="dm-region-map-count" x={labelX} y={labelY + 15}>{count}건</text> : null}
           </> : null}
         </g>;
