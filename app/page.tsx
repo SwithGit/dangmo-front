@@ -2575,7 +2575,7 @@ export default function Home() {
         orderName: payload.orderName,
         totalAmount: payload.amount,
         currency: "KRW",
-        payMethod: "CARD",
+        payMethod: "EASY_PAY",
         customer: {
           customerId: payload.customerId,
           email: payload.customerEmail,
