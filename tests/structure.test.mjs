@@ -63,6 +63,9 @@ test("map exploration is routable, accessible, and keeps nationwide counts separ
   assert.ok(page.indexOf('label: "지도 탐색"') < page.indexOf('label: "맞춤 추천"'));
   assert.match(page, /path: "\/app\/map"/);
   assert.match(view, /korea-overview\.geojson/);
+  assert.doesNotMatch(view, /seoul-municipalities\.geojson/);
+  assert.match(view, /서울은 자치구로 나누지 않고 서울특별시 한 단위/);
+  assert.match(view, /gyeonggi-municipalities\.geojson/);
   assert.match(view, /목록으로 보기/);
   assert.match(view, /popstate/);
   assert.match(map, /onKeyDown/);

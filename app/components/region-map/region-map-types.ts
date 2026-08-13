@@ -26,7 +26,7 @@ export type RegionalAnnouncement = {
   sourceLabel: string;
   applyEndAt: string;
   publishedAt: string;
-  scope: "nationwide" | "province" | "municipality";
+  scope: "nationwide" | "province" | "municipality" | "unsupported";
   regionCodes: string[];
   previewData: boolean;
 };
@@ -35,6 +35,7 @@ export type RegionAnnouncementsPayload = {
   region: Pick<RegionSummary, "code" | "name" | "level" | "parentCode">;
   previewData: boolean;
   regionalAnnouncements: RegionalAnnouncement[];
+  provinceAnnouncements?: RegionalAnnouncement[];
   nationwideAnnouncements: RegionalAnnouncement[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
   closestDeadline: string | null;
@@ -79,4 +80,3 @@ export type GeoFeatureCollection = {
     geometry: { type: "MultiPolygon"; coordinates: number[][][][] };
   }>;
 };
-
