@@ -44,12 +44,14 @@ export type RegionAnnouncementsPayload = {
 export type RegionInsight = {
   id: string;
   region: { code: string; name: string };
+  analysisUnit: { id: string; name: string; kind: "metro" | "municipality"; memberRegionCodes: string[] };
   announcement: { id: string; title: string };
-  status: "ready" | "insufficient_evidence";
+  status: "ready" | "insufficient_evidence" | "analysis_failed";
   summary: string;
-  issues: Array<{ title: string; summary: string; confidence: "high" | "medium" | "low"; evidenceIds: string[] }>;
-  proposalAngles: Array<{ id: string; title: string; rationale: string; beneficiaries: string[]; suggestedMetrics: string[]; cautions: string[]; evidenceIds: string[] }>;
-  evidence: Array<{ id: string; title: string; publisher: string; sourceType: "official" | "plan" | "council" | "statistics" | "news"; publishedAt: string; sourceUrl: string }>;
+  issues: Array<{ id: string; title: string; summary: string; scope: "unit_wide" | "district_case" | "province_context"; trend: "rising" | "stable" | "declining" | "mixed"; score: number; confidence: "high" | "medium" | "low"; limitations: string[]; evidenceIds: string[] }>;
+  proposalAngles: Array<{ id: string; title: string; regionalProblem: string; proposedSolution: string; announcementFit: string; businessFit: string; rationale: string; beneficiaries: string[]; executionPlan: string[]; suggestedMetrics: string[]; cautions: string[]; evidenceIds: string[]; fitScore: number }>;
+  evidence: Array<{ id: string; title: string; publisher: string; sourceType: string; publishedAt: string; sourceUrl: string; summary: string; scope: "unit_wide" | "district_case" | "province_context"; detailRegionLabel: string | null; regionRelevanceScore: number; sourceQualityScore: number; previewData: boolean }>;
+  readiness: { ready: boolean; documentCount: number; publisherCount: number; officialDocumentCount: number; recentDocumentCount: number; directDocumentCount: number; missing: string[] };
   lookbackMonths: number;
   analyzedAt: string;
   expiresAt: string;
@@ -59,7 +61,7 @@ export type RegionInsight = {
 
 export type RegionInsightResponse = {
   insight: RegionInsight;
-  billing: { creditCost: number; chargedCredits: number; remainingCredits: number | null; pricingMode: "test-free" | "paid"; cacheHit: boolean };
+  billing: { creditCost: number; chargedCredits: number; remainingCredits: number | null; pricingMode: "test-free" | "paid"; cacheHit: boolean; issueCacheHit?: boolean };
 };
 
 export type RegionalWritingContext = {
