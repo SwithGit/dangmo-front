@@ -2576,12 +2576,6 @@ export default function Home() {
         totalAmount: payload.amount,
         currency: "KRW",
         payMethod: "EASY_PAY",
-        customer: {
-          customerId: payload.customerId,
-          email: payload.customerEmail,
-          fullName: payload.customerName,
-        },
-        redirectUrl: payload.redirectUrl,
       });
       if (!payment) return;
       if (payment.code) {
