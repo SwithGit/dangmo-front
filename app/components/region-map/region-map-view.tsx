@@ -94,7 +94,7 @@ export function RegionMapView({ onLogin, onWrite }: {
         const childPayload = await loadRegions(area.code);
         if (!active) return;
         setChildren(childPayload.regions);
-        region = childPayload.regions.find((item) => item.code === initialRegion) ?? null;
+        region = childPayload.regions.find((item) => item.code === initialRegion) ?? area;
       }
       setSelectedRegion(region);
       if (region) {
@@ -133,7 +133,7 @@ export function RegionMapView({ onLogin, onWrite }: {
           const payload = await loadRegions(nextArea);
           if (!active) return;
           setChildren(payload.regions);
-          region = payload.regions.find((item) => item.code === nextRegion) ?? null;
+          region = payload.regions.find((item) => item.code === nextRegion) ?? area;
         } else setChildren([]);
         setAreaCode(nextArea); setSelectedRegion(region); setInsight(null);
         if (!region) { setAnnouncements(null); setSelectedAnnouncement(null); return; }
@@ -158,15 +158,18 @@ export function RegionMapView({ onLogin, onWrite }: {
     const detailed = hasMunicipalityDetail(region.code);
     setAreaCode(region.code);
     setChildren([]);
-    setSelectedRegion(detailed ? null : region);
+    setSelectedRegion(region);
     setAnnouncements(null);
     setSelectedAnnouncement(null);
     setInsight(null);
     setError("");
-    updateQuery(region.code, detailed ? "" : region.code);
+    updateQuery(region.code, region.code);
     try {
-      if (detailed) setChildren((await loadRegions(region.code)).regions);
-      else setAnnouncements(await loadRegionAnnouncements(region.code, sort));
+      if (detailed) {
+        const [childPayload, announcementPayload] = await Promise.all([loadRegions(region.code), loadRegionAnnouncements(region.code, sort)]);
+        setChildren(childPayload.regions);
+        setAnnouncements(announcementPayload);
+      } else setAnnouncements(await loadRegionAnnouncements(region.code, sort));
       trackEvent("region_selected", { level: "province", region_code: region.code });
     } catch (nextError) { setError(nextError instanceof Error ? nextError.message : "지역 정보를 불러오지 못했습니다."); }
   };
@@ -229,10 +232,10 @@ export function RegionMapView({ onLogin, onWrite }: {
       </div>
     </section> : <>
       {detailedArea ? <section className="dm-region-detail-map">
-        <header><div><button type="button" onClick={clearArea}>← 전국 보기</button><span>2단계</span><h2>{areaName} 상세 지도</h2><p>{children.length}개 하위 시·군의 지역 대상 모집 중 공고 수입니다. 시·도 전체 공고는 각 지역 숫자에 합산하지 않습니다.</p></div><button className="dm-button" type="button" onClick={() => setListOnly((value) => !value)}>{listOnly ? "지도와 함께 보기" : "목록으로 보기"}</button></header>
+        <header><div><button type="button" onClick={clearArea}>← 전국 보기</button><span>2단계</span><h2>{areaName} 상세 지도</h2><p>{children.length}개 하위 시·군을 선택해 좁혀볼 수 있습니다. 현재 시·도 전체 공고 수는 전국 지도 숫자와 동일합니다.</p>{selectedRegion?.level === "municipality" && area ? <button type="button" onClick={() => void selectRegion(area)}>← {areaName} 전체 공고 {area.regionalOpenCount}건 보기</button> : null}</div><button className="dm-button" type="button" onClick={() => setListOnly((value) => !value)}>{listOnly ? "지도와 함께 보기" : "목록으로 보기"}</button></header>
         <div className={listOnly ? "dm-region-map-layout is-list-only" : "dm-region-map-layout"}>
-          <AdministrativeMap key={areaCode} asset={DETAIL_AREA_ASSETS[areaCode]} regions={children} selectedCode={selectedRegion?.code ?? ""} onSelect={(region) => void selectRegion(region)} />
-          <RegionSummaryPanel title={`${areaName} 시·군 목록`} regions={children} selectedCode={selectedRegion?.code ?? ""} onSelect={(region) => void selectRegion(region)} />
+          <AdministrativeMap key={areaCode} asset={DETAIL_AREA_ASSETS[areaCode]} regions={children} selectedCode={selectedRegion?.level === "municipality" ? selectedRegion.code : ""} onSelect={(region) => void selectRegion(region)} />
+          <RegionSummaryPanel title={`${areaName} 시·군 목록`} regions={children} selectedCode={selectedRegion?.level === "municipality" ? selectedRegion.code : ""} onSelect={(region) => void selectRegion(region)} />
         </div>
       </section> : <section className="dm-region-detail-map">
         <header><div><button type="button" onClick={clearArea}>← 전국 보기</button><span>2단계</span><h2>{areaName} 지원사업</h2><p>{areaName}은 하위 구로 나누지 않고 전체 지도와 공고 수 하나로 제공합니다.</p></div></header>
@@ -240,9 +243,9 @@ export function RegionMapView({ onLogin, onWrite }: {
       </section>}
 
       {selectedRegion && announcements ? <section className="dm-region-business-panel">
-        <header className="dm-region-panel-head"><div><span>3단계 · 선택 지역</span><h2>{selectedRegion.name} 지원사업</h2><p>지역 대상 {announcements.pagination.total}건{detailedArea ? ` · ${areaName} 전체 ${(announcements.provinceAnnouncements ?? []).length}건` : ""} · 전국 공통 {announcements.nationwideAnnouncements.length}건{announcements.closestDeadline ? ` · 가장 가까운 지역 공고 마감 ${new Date(announcements.closestDeadline).toLocaleDateString("ko-KR")}` : ""}</p></div>{announcements.previewData ? <b>테스트 데이터</b> : null}</header>
+        <header className="dm-region-panel-head"><div><span>3단계 · 선택 지역</span><h2>{selectedRegion.name} 지원사업</h2><p>지역 대상 {announcements.pagination.total}건{detailedArea && selectedRegion.level === "municipality" ? ` · ${areaName} 전체 ${(announcements.provinceAnnouncements ?? []).length}건` : ""} · 전국 공통 {announcements.nationwideAnnouncements.length}건{announcements.closestDeadline ? ` · 가장 가까운 지역 공고 마감 ${new Date(announcements.closestDeadline).toLocaleDateString("ko-KR")}` : ""}</p></div>{announcements.previewData ? <b>테스트 데이터</b> : null}</header>
         <div className="dm-region-filters"><label>정렬<select value={sort} onChange={(event) => { setSort(event.target.value); void selectRegion(selectedRegion, event.target.value); }}><option value="deadline">마감 임박순</option><option value="latest">최신순</option><option value="recommendation">추천순</option></select></label><label>사업 분야<select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></label><span>모집 상태 <b>모집 중</b></span><span>대상 <b>지역 + 전국 분리</b></span></div>
-        <RegionAnnouncementList regional={filteredRegional} province={announcements.provinceAnnouncements ?? []} provinceName={areaName} showProvince={detailedArea} nationwide={announcements.nationwideAnnouncements} selectedId={selectedAnnouncement?.id ?? ""} onSelect={selectAnnouncement} />
+        <RegionAnnouncementList regional={filteredRegional} province={announcements.provinceAnnouncements ?? []} provinceName={areaName} showProvince={detailedArea && selectedRegion.level === "municipality"} nationwide={announcements.nationwideAnnouncements} selectedId={selectedAnnouncement?.id ?? ""} onSelect={selectAnnouncement} />
         <aside className={`dm-region-analysis-action${selectedAnnouncement ? " is-ready" : ""}`}>
           <div><span aria-hidden="true">✦</span><div><strong>{selectedAnnouncement ? selectedAnnouncement.title : "분석할 지원사업을 먼저 선택하세요"}</strong><p>{selectedAnnouncement ? `${selectedRegion.name}의 최근 12개월 공식자료와 정책 수요 신호를 연결합니다.` : "지역 또는 전국 공통 지원사업 중 하나를 선택하면 분석 버튼이 활성화됩니다."}</p></div></div>
           <button className="dm-primary-button" type="button" disabled={!selectedAnnouncement || analysisState === "loading"} onClick={() => void analyze()}>{analysisState === "loading" ? "지역 자료 분석 중…" : "지역 인사이트 무료 분석"}<small>AI 크레딧 0 · 테스트 기간</small></button>

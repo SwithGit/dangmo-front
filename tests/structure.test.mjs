@@ -71,6 +71,8 @@ test("map exploration is routable, accessible, and keeps nationwide counts separ
   assert.match(view, /dm-region-map-single/);
   assert.match(view, /gyeonggi-municipalities\.geojson/);
   assert.match(view, /광역시는 전체 단위로, 도 지역은 시·군 단위/);
+  assert.match(view, /전체 공고 \{area\.regionalOpenCount\}건 보기/);
+  assert.match(view, /loadRegionAnnouncements\(region\.code, sort\)/);
   assert.match(view, /목록으로 보기/);
   assert.match(view, /popstate/);
   assert.match(map, /onKeyDown/);
