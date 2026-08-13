@@ -965,7 +965,7 @@ const defaultAnnouncementRequest: AnnouncementFeedRequest = {
   audience: "public",
 };
 
-function announcementFeedUrl(request: AnnouncementFeedRequest) {
+function announcementFeedUrl(request: AnnouncementFeedRequest, refreshKey?: string) {
   const params = new URLSearchParams({
     page: String(request.page),
     pageSize: "50",
@@ -977,6 +977,7 @@ function announcementFeedUrl(request: AnnouncementFeedRequest) {
   });
   request.stages.forEach((stage) => params.append("stage", stage));
   if (request.mode === "recommendations") params.set("minScore", String(MIN_RECOMMENDATION_SCORE));
+  if (refreshKey) params.set("refresh", refreshKey);
   return `/api/announcements?${params.toString()}`;
 }
 
@@ -1262,18 +1263,24 @@ export default function Home() {
       return () => { active = false; };
     }
 
+    invalidateRecommendationCache();
+    const refreshedFeed = fetch(announcementFeedUrl(announcementRequestRef.current, syncRun.id), {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+      .then((response) => responseJson<AnnouncementFeedPayload>(response))
+      .then((feed) => applyAnnouncementFeed(feed));
+    const refreshedRecommendations = loadRecommendationPage(1);
+
     void Promise.allSettled([
-      fetch(announcementFeedUrl(announcementRequestRef.current), { headers: { Accept: "application/json" } })
-        .then((response) => responseJson<AnnouncementFeedPayload>(response)),
+      refreshedFeed,
+      refreshedRecommendations,
       fetch("/api/notifications", { headers: { Accept: "application/json" } })
         .then((response) => responseJson<NotificationPayload>(response)),
       fetch("/api/sources", { headers: { Accept: "application/json" } })
         .then((response) => responseJson<CustomSourcePayload>(response)),
-    ]).then(([feedResult, notificationResult, sourceResult]) => {
+    ]).then(([, , notificationResult, sourceResult]) => {
       if (!active) return;
-      if (feedResult.status === "fulfilled") {
-        applyAnnouncementFeed(feedResult.value);
-      }
       if (notificationResult.status === "fulfilled") {
         setNotifications(notificationResult.value.items);
         setUnreadCount(notificationResult.value.unreadCount);
@@ -1290,7 +1297,7 @@ export default function Home() {
       active = false;
       if (closeTimer) window.clearTimeout(closeTimer);
     };
-  }, [applyAnnouncementFeed, syncRun?.id, syncRun?.status]);
+  }, [applyAnnouncementFeed, invalidateRecommendationCache, loadRecommendationPage, syncRun?.id, syncRun?.status]);
 
   useEffect(() => {
     let active = true;

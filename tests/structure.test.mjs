@@ -30,3 +30,10 @@ test("application menus use routable Next.js paths", async () => {
   assert.match(application, /\/app\/profile\/business/);
   assert.match(routePage, /DangmoApplication/);
 });
+
+test("completed announcement sync refreshes the full feed and personalized recommendations", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /invalidateRecommendationCache\(\)/);
+  assert.match(page, /announcementFeedUrl\(announcementRequestRef\.current, syncRun\.id\)/);
+  assert.match(page, /const refreshedRecommendations = loadRecommendationPage\(1\)/);
+});
