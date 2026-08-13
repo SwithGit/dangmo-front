@@ -2582,7 +2582,6 @@ export default function Home() {
           fullName: payload.customerName,
         },
         redirectUrl: payload.redirectUrl,
-        noticeUrls: [payload.webhookUrl],
       });
       if (!payment) return;
       if (payment.code) {
