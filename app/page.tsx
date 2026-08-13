@@ -3,6 +3,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import * as PortOne from "@portone/browser-sdk/v2";
 import { KSIC_DIVISIONS, REGION_OPTIONS, startupAge } from "../lib/profile-options";
 import { consumeLoginMethod, rememberLoginMethod, trackEvent, trackPageView } from "../lib/analytics";
@@ -759,6 +760,18 @@ const profileAnalyticsMeta: Record<ProfileTab, { path: string; title: string; me
   logic: { path: "/app/profile/logic", title: "맞춤 추천 기준", menuName: "내 프로필 · 추천 기준" },
 };
 
+function applicationRoute(pathname: string): { view: View; profileTab?: ProfileTab } {
+  const normalizedPath = pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname;
+  const profileRoute = (Object.entries(profileAnalyticsMeta) as Array<[ProfileTab, (typeof profileAnalyticsMeta)[ProfileTab]]>)
+    .find(([, meta]) => meta.path === normalizedPath);
+  if (profileRoute) return { view: "profile", profileTab: profileRoute[0] };
+
+  const viewRoute = (Object.entries(viewAnalyticsMeta) as Array<[View, (typeof viewAnalyticsMeta)[View]]>)
+    .find(([, meta]) => meta.path === normalizedPath);
+  if (viewRoute) return { view: viewRoute[0] };
+  return { view: "explore" };
+}
+
 const practiceBudgetRules: BudgetRules = {
   confirmed: false,
   supportMaxRatio: null,
@@ -968,6 +981,8 @@ function announcementFeedUrl(request: AnnouncementFeedRequest) {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const pathname = usePathname();
   const [view, setView] = useState<View>("explore");
   const [profileTab, setProfileTab] = useState<ProfileTab>("business");
   const [query, setQuery] = useState("");
@@ -1054,6 +1069,24 @@ export default function Home() {
   const [workspaceState, setWorkspaceState] = useState<"loading" | "ready" | "auth" | "error">("loading");
   const [activity, setActivity] = useState("");
   const [syncRun, setSyncRun] = useState<AutomationRun | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      const route = applicationRoute(pathname);
+      setView(route.view);
+      if (route.profileTab) setProfileTab(route.profileTab);
+      if (route.view !== "budget") setPracticeBudgetActiveId("");
+      if (route.view !== "writing") setPracticeWritingActiveId("");
+      setActiveProjectId("");
+      setNotificationOpen(false);
+      setAccountOpen(false);
+      setLoginDialogOpen(false);
+      setDetail(null);
+    });
+    return () => { active = false; };
+  }, [pathname]);
 
   const applyAnnouncementFeed = useCallback((feed: AnnouncementFeedPayload) => {
     setAnnouncementFeed(feed.announcements);
@@ -1560,6 +1593,9 @@ export default function Home() {
 
   const navigate = (nextView: View, nextProfileTab?: ProfileTab) => {
     const resolvedProfileTab = nextProfileTab ?? profileTab;
+    const targetPath = nextView === "profile"
+      ? profileAnalyticsMeta[resolvedProfileTab].path
+      : viewAnalyticsMeta[nextView].path;
     const changed = nextView !== view || (nextView === "profile" && resolvedProfileTab !== profileTab);
     if (changed) {
       const analyticsMeta = nextView === "profile"
@@ -1573,6 +1609,7 @@ export default function Home() {
     setActiveProjectId("");
     setView(nextView);
     if (nextProfileTab) setProfileTab(nextProfileTab);
+    if (pathname !== targetPath) router.push(targetPath, { scroll: false });
     setNotificationOpen(false);
     setAccountOpen(false);
     setLoginDialogOpen(false);
@@ -2896,7 +2933,7 @@ export default function Home() {
           {view === "profile" ? (
             <ProfileView
               tab={profileTab}
-              setTab={setProfileTab}
+              setTab={(tab) => navigate("profile", tab)}
               documents={documents}
               documentUploadState={documentUploadState}
               profileAnalysisRunState={profileAnalysisRunState}
