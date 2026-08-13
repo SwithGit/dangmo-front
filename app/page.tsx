@@ -7,12 +7,15 @@ import { usePathname } from "next/navigation";
 import * as PortOne from "@portone/browser-sdk/v2";
 import { KSIC_DIVISIONS, REGION_OPTIONS, startupAge } from "../lib/profile-options";
 import { consumeLoginMethod, rememberLoginMethod, trackEvent, trackPageView } from "../lib/analytics";
+import type { RegionalAnnouncement, RegionalWritingContext } from "./components/region-map/region-map-types";
 
 const LazyCommunityBoardView = lazy(() => import("./components/community-views").then((module) => ({ default: module.CommunityBoardView })));
 const LazyCustomerSupportView = lazy(() => import("./components/community-views").then((module) => ({ default: module.CustomerSupportView })));
+const LazyRegionMapView = lazy(() => import("./components/region-map/region-map-view").then((module) => ({ default: module.RegionMapView })));
 
 type View =
   | "explore"
+  | "map"
   | "match"
   | "projects"
   | "budget"
@@ -710,6 +713,7 @@ const navGroups: Array<{
     label: "탐색",
     items: [
       { icon: "⌖", label: "지원사업 탐색", view: "explore" },
+      { icon: "◇", label: "지도 탐색", view: "map", badge: "NEW" },
       { icon: "✦", label: "맞춤 추천", view: "match" },
     ],
   },
@@ -733,6 +737,7 @@ const navGroups: Array<{
 
 const viewMeta: Record<View, { eyebrow: string; title: string }> = {
   explore: { eyebrow: "지원사업 탐색", title: "지원사업 전체보기" },
+  map: { eyebrow: "지역별 지원사업", title: "지도에서 지원사업 찾기" },
   match: { eyebrow: "AI 사업 프로필 기준", title: "맞춤 추천" },
   projects: { eyebrow: "저장 공고 · 준비 현황", title: "나의 사업" },
   budget: { eyebrow: "자동 계산 · 제약 검증", title: "사업비 편성" },
@@ -749,6 +754,7 @@ const viewMeta: Record<View, { eyebrow: string; title: string }> = {
 
 const viewAnalyticsMeta: Record<View, { path: string; menuName: string }> = {
   explore: { path: "/app/explore", menuName: "지원사업 탐색" },
+  map: { path: "/app/map", menuName: "지도 탐색" },
   match: { path: "/app/recommendations", menuName: "맞춤 추천" },
   projects: { path: "/app/projects", menuName: "나의 사업" },
   budget: { path: "/app/budget", menuName: "사업비 편성" },
@@ -1047,6 +1053,7 @@ export default function Home() {
   const [draftSections, setDraftSections] = useState<DraftSection[]>(initialDraftSections);
   const [draftVersions, setDraftVersions] = useState<DraftRevision[]>([]);
   const [writingAiRun, setWritingAiRun] = useState<{ sectionId: string; operation: AiDraftOperation } | null>(null);
+  const [regionalWritingContext, setRegionalWritingContext] = useState<RegionalWritingContext | null>(null);
   const [practiceWritingWorkspaces, setPracticeWritingWorkspaces] = useState<PracticeWritingWorkspace[]>([]);
   const [practiceWritingActiveId, setPracticeWritingActiveId] = useState("");
   const [practiceWritingStorageReady, setPracticeWritingStorageReady] = useState(false);
@@ -1778,6 +1785,60 @@ export default function Home() {
     });
   };
 
+  const startRegionalWriting = async (context: RegionalWritingContext, announcement: RegionalAnnouncement) => {
+    if (workspaceState !== "ready") {
+      openLoginDialog();
+      return;
+    }
+    await runActivity("지역 제안 방향으로 작성 시작", async () => {
+      const payload = await responseJson<{ project: SavedProject }>(await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "preparing",
+          announcement: {
+            sourceKey: `region-map:${announcement.id}`,
+            title: announcement.title,
+            institution: announcement.institution,
+            sourceUrl: announcement.sourceUrl,
+            sourceLabel: announcement.sourceLabel,
+            support: "지원 규모 원문 확인",
+            applyEndAt: announcement.applyEndAt,
+            dday: "모집 중",
+            category: announcement.category,
+            region: context.regionName,
+            overview: `${context.regionName} 지역 인사이트에서 선택한 지원사업입니다.`,
+            deadline: announcement.applyEndAt ? `접수 ${new Date(announcement.applyEndAt).toLocaleDateString("ko-KR")}까지` : "접수 일정 원문 확인",
+            eligibility: [announcement.target],
+            benefits: ["지원 내용은 공고 원문 확인"],
+            requiredDocuments: ["사업신청서", "사업계획서"],
+            programPeriod: "공고 원문 확인",
+            applicationMethod: "공고 원문 확인",
+            contact: announcement.institution,
+            publishedAt: announcement.publishedAt,
+            tags: [announcement.category, context.regionName],
+            checklistTemplate: defaultChecklistTemplate,
+            budgetRules: defaultBudgetRules,
+            writingTemplate: defaultWritingTemplate,
+          },
+        }),
+      }));
+      upsertProject(payload.project);
+      const workspace = await responseJson<WorkspacePayload>(
+        await fetch(`/api/workspace?projectId=${encodeURIComponent(payload.project.id)}`, { headers: { Accept: "application/json" } }),
+      );
+      setRegionalWritingContext(context);
+      setActiveProjectId(payload.project.id);
+      setActiveProjectTitle(payload.project.title);
+      setActiveBudgetRules(payload.project.budgetRules);
+      setBudgetItems(workspace.budgetItems);
+      setDraftSections(workspace.draftSections);
+      setDraftVersions(workspace.draftVersions);
+      setProjects(workspace.projects);
+      navigate("writing");
+    });
+  };
+
   const updateChecklist = async (projectId: string, key: keyof ProjectChecklist) => {
     const project = projects.find((item) => item.id === projectId);
     if (!project) return;
@@ -1815,6 +1876,7 @@ export default function Home() {
     setBudgetItems([]);
     setDraftSections(initialDraftSections);
     setDraftVersions([]);
+    setRegionalWritingContext(null);
   };
 
   const syncAnnouncements = async () => {
@@ -2405,7 +2467,12 @@ export default function Home() {
         const response = await fetch("/api/ai/draft", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Dangmo-Project-Id": activeProjectId },
-          body: JSON.stringify({ operation, section }),
+          body: JSON.stringify({ operation, section, regionalContext: regionalWritingContext ? {
+            regionCode: regionalWritingContext.regionCode,
+            regionInsightId: regionalWritingContext.regionInsightId,
+            proposalAngleId: regionalWritingContext.proposalAngleId,
+            announcementId: regionalWritingContext.announcementId,
+          } : undefined }),
         });
         if (response.status === 402) {
           navigate("plan");
@@ -2820,7 +2887,7 @@ export default function Home() {
             </>}
           </aside>
 
-          {workspaceState === "auth" && !["explore", "match", "projects", "budget", "writing"].includes(view) ? (
+          {workspaceState === "auth" && !["explore", "map", "match", "projects", "budget", "writing"].includes(view) ? (
             <aside className="dm-auth-banner">
               <span><strong>로그인이 필요합니다</strong><small>사업자료와 작성 내용을 안전하게 저장하려면 SSO로 로그인해주세요.</small></span>
               <div className="dm-auth-actions">
@@ -2867,6 +2934,7 @@ export default function Home() {
               onManageSources={() => setSourceManagerOpen(true)}
             />
           ) : null}
+          {view === "map" ? <Suspense fallback={<MenuLoadingState label="지도 탐색" />}><LazyRegionMapView onLogin={openLoginDialog} onWrite={startRegionalWriting} /></Suspense> : null}
           {view === "match" ? workspaceState === "auth"
             ? <GuestMatchView onLogin={openLoginDialog} />
             : <MatchView navigate={navigate} profileAnalysis={profileAnalysis} announcements={recommendedAnnouncementFeed} total={recommendationCount} pagination={recommendationPagination} loading={recommendationLoading} onPageChange={loadRecommendationPage} onDetail={openAnnouncementDetail} />
@@ -2926,6 +2994,7 @@ export default function Home() {
                 runAi={runWritingAi}
                 aiRun={writingAiRun}
                 activeProfileSummary={profileSummary}
+                regionalContext={regionalWritingContext}
                 restoreVersion={restoreDraft}
                 save={saveDraftContent}
                 navigate={navigate}
@@ -3863,7 +3932,7 @@ function BudgetGroup({ source, items, total, allocationTarget, showBalance, addI
   return <section className="dm-budget-group"><div className="dm-budget-group-head"><div className="dm-budget-group-summary"><strong>{labels[source]}</strong>{showBalance ? <small>편성 {formatWon(assigned)} / 배정 {formatWon(allocationTarget)} <b className={balance < 0 ? "is-over" : ""}>{balance < 0 ? "초과" : "잔액"} {formatWon(Math.abs(balance))}</b></small> : null}</div><button className="dm-button" type="button" onClick={() => addItem(source)}>＋ 세목 추가</button></div>{showBalance ? <div className="dm-budget-group-progress" aria-label={`${labels[source]} 편성률 ${ratio(assigned, allocationTarget).toFixed(0)}%`}><span className={balance < 0 ? "is-over" : ""} style={{ width: `${Math.min(100, ratio(assigned, allocationTarget))}%` }} /></div> : null}<div className="dm-budget-rows">{items.map((item, index) => { const balanceAfterItem = allocationTarget - items.slice(0, index + 1).reduce((sum, current) => sum + current.amount, 0); return <div className="dm-budget-row-wrap" key={item.id}><div className="dm-budget-row"><label><span className="sr-only">비목</span><input value={item.category} placeholder="예: 인건비" onChange={(event) => updateItem(item.id, { category: event.target.value })} /></label><label><span className="sr-only">세목 및 산출근거</span><input value={item.name} placeholder="예: 300만원 × 100% × 5개월" onChange={(event) => updateItem(item.id, { name: event.target.value })} /></label><label><span className="sr-only">금액</span><input inputMode="numeric" value={item.amount.toLocaleString("ko-KR")} onFocus={(event) => event.currentTarget.select()} onChange={(event) => updateItem(item.id, { amount: Number(event.target.value.replace(/[^0-9]/g, "")) || 0 })} /></label><output>{ratio(item.amount, total).toFixed(1)}%</output><button className="dm-remove-row" type="button" aria-label={`${item.category || "세목"} 삭제`} onClick={() => removeItem(item.id)}>×</button></div>{showBalance ? <small className={balanceAfterItem < 0 ? "dm-budget-row-balance is-over" : "dm-budget-row-balance"}>입력 후 {labels[source]} 잔액 <strong>{formatWon(balanceAfterItem)}</strong></small> : null}</div>; })}</div></section>;
 }
 
-function WritingView({ projectTitle, sections, versions, updateSection, addSection, removeSection, credits = 0, runAi, aiRun = null, activeProfileSummary = "", restoreVersion, save, navigate, practice = false, guestMode = false, close, reset, clear }: { projectTitle: string; sections: DraftSection[]; versions: DraftRevision[]; updateSection: (id: string, patch: Partial<DraftSection>) => void; addSection: () => void; removeSection: (id: string) => void; credits?: number; runAi?: (sectionId: string, operation: AiDraftOperation) => void; aiRun?: { sectionId: string; operation: AiDraftOperation } | null; activeProfileSummary?: string; restoreVersion?: (revisionId: string) => void; save?: () => void; navigate?: (view: View, profileTab?: ProfileTab) => void; practice?: boolean; guestMode?: boolean; close?: () => void; reset?: () => void; clear?: () => void }) {
+function WritingView({ projectTitle, sections, versions, updateSection, addSection, removeSection, credits = 0, runAi, aiRun = null, activeProfileSummary = "", regionalContext = null, restoreVersion, save, navigate, practice = false, guestMode = false, close, reset, clear }: { projectTitle: string; sections: DraftSection[]; versions: DraftRevision[]; updateSection: (id: string, patch: Partial<DraftSection>) => void; addSection: () => void; removeSection: (id: string) => void; credits?: number; runAi?: (sectionId: string, operation: AiDraftOperation) => void; aiRun?: { sectionId: string; operation: AiDraftOperation } | null; activeProfileSummary?: string; regionalContext?: RegionalWritingContext | null; restoreVersion?: (revisionId: string) => void; save?: () => void; navigate?: (view: View, profileTab?: ProfileTab) => void; practice?: boolean; guestMode?: boolean; close?: () => void; reset?: () => void; clear?: () => void }) {
   const completed = sections.filter((section) => section.content.trim().length > 0).length;
   const progress = Math.round((completed / Math.max(1, sections.length)) * 100);
   const exportWord = () => {
@@ -3890,6 +3959,7 @@ function WritingView({ projectTitle, sections, versions, updateSection, addSecti
 
   return (
     <div className="dm-writing-page">
+      {regionalContext ? <aside className="dm-writing-region-context"><span aria-hidden="true">⌖</span><div><strong>{regionalContext.regionName} 지역 제안 방향 적용</strong><p>{regionalContext.proposalAngleTitle}</p><small>서버에 저장된 인사이트·근거 ID를 AI 작성 시 다시 검증합니다. 본문 생성에는 기존 AI 크레딧이 적용됩니다.</small></div><button type="button" onClick={() => navigate?.("map")}>지도 분석 다시 보기</button></aside> : null}
       <section className="dm-writing-summary">
         <div>
           <span className="dm-badge">{practice ? "연습용 프리셋" : `작성 항목 ${sections.length}개`}</span>

@@ -47,3 +47,28 @@ test("paid plan UI matches backend entitlements and keeps live charges admin-gat
   assert.match(page, /관리자 실결제 시험/);
   assert.match(page, /partial_canceled/);
 });
+
+test("map exploration is routable, accessible, and keeps nationwide counts separate", async () => {
+  const [page, view, map, list, insight, api] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/region-map/region-map-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/region-map/administrative-map.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/region-map/region-announcement-list.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/region-map/region-insight-panel.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/region-map/region-map-api.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /\| "map"/);
+  assert.match(page, /label: "지도 탐색", view: "map"/);
+  assert.ok(page.indexOf('label: "지원사업 탐색"') < page.indexOf('label: "지도 탐색"'));
+  assert.ok(page.indexOf('label: "지도 탐색"') < page.indexOf('label: "맞춤 추천"'));
+  assert.match(page, /path: "\/app\/map"/);
+  assert.match(view, /korea-overview\.geojson/);
+  assert.match(view, /목록으로 보기/);
+  assert.match(view, /popstate/);
+  assert.match(map, /onKeyDown/);
+  assert.match(map, /aria-label=.*지역 대상 모집 중 공고/);
+  assert.match(list, /전국 공통 지원사업/);
+  assert.match(insight, /불확실성 안내/);
+  assert.match(insight, /AI 크레딧/);
+  assert.match(api, /\/api\/regions/);
+});
