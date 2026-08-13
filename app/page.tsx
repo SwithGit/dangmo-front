@@ -3,7 +3,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import * as PortOne from "@portone/browser-sdk/v2";
 import { KSIC_DIVISIONS, REGION_OPTIONS, startupAge } from "../lib/profile-options";
 import { consumeLoginMethod, rememberLoginMethod, trackEvent, trackPageView } from "../lib/analytics";
@@ -981,10 +981,10 @@ function announcementFeedUrl(request: AnnouncementFeedRequest) {
 }
 
 export default function Home() {
-  const router = useRouter();
   const pathname = usePathname();
-  const [view, setView] = useState<View>("explore");
-  const [profileTab, setProfileTab] = useState<ProfileTab>("business");
+  const initialRoute = applicationRoute(pathname);
+  const [view, setView] = useState<View>(initialRoute.view);
+  const [profileTab, setProfileTab] = useState<ProfileTab>(initialRoute.profileTab ?? "business");
   const [query, setQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState(["전체"]);
   const [announcementFeed, setAnnouncementFeed] = useState<Announcement[]>(announcements);
@@ -1609,7 +1609,7 @@ export default function Home() {
     setActiveProjectId("");
     setView(nextView);
     if (nextProfileTab) setProfileTab(nextProfileTab);
-    if (pathname !== targetPath) router.push(targetPath, { scroll: false });
+    if (pathname !== targetPath) window.history.pushState({}, "", targetPath);
     setNotificationOpen(false);
     setAccountOpen(false);
     setLoginDialogOpen(false);

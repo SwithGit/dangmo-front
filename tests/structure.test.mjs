@@ -23,8 +23,9 @@ test("frontend does not contain Cloudflare runtime bindings", async () => {
 test("application menus use routable Next.js paths", async () => {
   const application = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const routePage = await readFile(new URL("../app/app/[[...route]]/page.tsx", import.meta.url), "utf8");
-  assert.match(application, /usePathname, useRouter/);
-  assert.match(application, /router\.push\(targetPath/);
+  assert.match(application, /usePathname/);
+  assert.match(application, /window\.history\.pushState\(\{\}, "", targetPath\)/);
+  assert.doesNotMatch(application, /router\.push\(targetPath/);
   assert.match(application, /\/app\/explore/);
   assert.match(application, /\/app\/profile\/business/);
   assert.match(routePage, /DangmoApplication/);
