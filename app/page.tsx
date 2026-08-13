@@ -1801,6 +1801,10 @@ export default function Home() {
       openLoginDialog();
       return;
     }
+    if (!isAdmin) {
+      setActivity("관리자만 전체 공고 업데이트를 실행할 수 있어요.");
+      return;
+    }
     if (syncBusy) {
       setActivity("이미 전체 공고 업데이트가 진행 중이에요.");
       return;
@@ -2708,7 +2712,7 @@ export default function Home() {
                 <span className="dm-bell" aria-hidden="true" />
                 {unreadCount > 0 ? <span className="dm-notification-count">{unreadCount}</span> : null}
               </button>
-              <button
+              {isAdmin ? <button
                 className={`dm-primary-button dm-sync-button${syncBusy ? " is-running" : ""}`}
                 type="button"
                 disabled={syncBusy}
@@ -2717,7 +2721,7 @@ export default function Home() {
               >
                 <span className="dm-refresh-icon" aria-hidden="true" />
                 {syncBusy ? `${syncRun?.progressPercent ?? 0}% 업데이트 중` : "전체 공고 업데이트"}
-              </button>
+              </button> : null}
             </div>
           </header>
 
