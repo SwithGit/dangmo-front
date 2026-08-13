@@ -37,3 +37,13 @@ test("completed announcement sync refreshes the full feed and personalized recom
   assert.match(page, /announcementFeedUrl\(announcementRequestRef\.current, syncRun\.id\)/);
   assert.match(page, /const refreshedRecommendations = loadRecommendationPage\(1\)/);
 });
+
+test("paid plan UI matches backend entitlements and keeps live charges admin-gated", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /AI 프로필 버전 최대 2개/);
+  assert.match(page, /AI 프로필 버전 최대 5개/);
+  assert.match(page, /const isPaid = plan === "start" \|\| isPro/);
+  assert.match(page, /live-admin-test/);
+  assert.match(page, /관리자 실결제 시험/);
+  assert.match(page, /partial_canceled/);
+});

@@ -396,6 +396,12 @@ type BillingPayload = {
   trialEndsAt: string | null;
   checkoutConfigured: boolean;
   provider: string | null;
+  entitlements: {
+    profileVersionLimit: number;
+    reminderDays: number[];
+    matchAlerts: boolean;
+    changeAlerts: boolean;
+  };
   readiness: {
     providerConfigured: boolean;
     checkoutConfigured: boolean;
@@ -404,10 +410,13 @@ type BillingPayload = {
     secretKeyConfigured: boolean;
     recurringConfigured: boolean;
     productsConfigured: boolean;
+    liveConfirmed: boolean;
+    liveAdminOnly: boolean;
+    checkoutRestricted: boolean;
     webhookUrl: string;
     successUrl: string;
     failUrl: string;
-    mode: "preparation" | "key-mismatch" | "sandbox-ready" | "live-ready";
+    mode: "preparation" | "sandbox-ready" | "live-admin-test" | "live-restricted" | "live-ready";
   };
   products: BillingProduct[];
   history: BillingHistoryItem[];
@@ -832,6 +841,12 @@ const initialBilling: BillingPayload = {
   trialEndsAt: null,
   checkoutConfigured: false,
   provider: null,
+  entitlements: {
+    profileVersionLimit: 1,
+    reminderDays: [7, 1],
+    matchAlerts: false,
+    changeAlerts: false,
+  },
   readiness: {
     providerConfigured: false,
     checkoutConfigured: false,
@@ -840,6 +855,9 @@ const initialBilling: BillingPayload = {
     secretKeyConfigured: false,
     recurringConfigured: false,
     productsConfigured: true,
+    liveConfirmed: false,
+    liveAdminOnly: false,
+    checkoutRestricted: false,
     webhookUrl: "https://dangmo.kr/api/billing/webhook",
     successUrl: "https://dangmo.kr/?payment=success",
     failUrl: "https://dangmo.kr/?payment=fail",
@@ -1017,7 +1035,6 @@ export default function Home() {
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(defaultNotificationPreferences);
   const [emailProviderConnected, setEmailProviderConnected] = useState(false);
   const [aiCredits, setAiCredits] = useState(3);
-  const [isPro, setIsPro] = useState(false);
   const [billing, setBilling] = useState<BillingPayload>(initialBilling);
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [practiceBudgetWorkspaces, setPracticeBudgetWorkspaces] = useState<PracticeBudgetWorkspace[]>([]);
@@ -1206,7 +1223,6 @@ export default function Home() {
         if (!active) return;
         setBilling(payload.billing);
         setAiCredits(payload.billing.credits);
-        setIsPro(payload.billing.plan === "pro");
         setActivity("결제가 완료되어 30일 이용권 또는 AI 크레딧이 반영됐습니다.");
       }).catch((error) => {
         if (active) setActivity(error instanceof Error ? error.message : "PortOne 결제를 확인하지 못했습니다.");
@@ -1336,7 +1352,6 @@ export default function Home() {
         setIsAdmin(workspace.user.admin);
         setAuthProvider(workspace.user.authProvider);
         setAiCredits(workspace.user.aiCredits);
-        setIsPro(workspace.user.plan === "pro");
         setProfileSummary(workspace.profile.summary);
         setBasicProfile({
           summary: workspace.profile.summary,
@@ -1387,7 +1402,6 @@ export default function Home() {
         if (billingResult.status === "fulfilled") {
           setBilling(billingResult.value);
           setAiCredits(billingResult.value.credits);
-          setIsPro(billingResult.value.plan === "pro");
         } else {
           setActivity(billingResult.reason instanceof Error
             ? billingResult.reason.message
@@ -2292,7 +2306,7 @@ export default function Home() {
             payload.card!,
             ...current.filter((version) => version.id !== payload.card!.id)
               .map((version) => ({ ...version, active: false })),
-          ].slice(0, 20));
+          ].slice(0, billing.entitlements.profileVersionLimit));
         }
         setProfileAnalysis(payload.analysis);
         setProfileSummary(payload.summary);
@@ -2586,7 +2600,6 @@ export default function Home() {
       }));
       setBilling(confirmed.billing);
       setAiCredits(confirmed.billing.credits);
-      setIsPro(confirmed.billing.plan === "pro");
       return;
     }
   });
@@ -2659,7 +2672,7 @@ export default function Home() {
                 <div className="dm-account-summary">
                   <span className="dm-avatar" aria-hidden="true">{accountInitial}</span>
                   <div><strong>{accountDisplayName}</strong><small>{accountMeta}</small></div>
-                  <span className="dm-badge">{isPro ? "Pro" : "Free"}</span>
+                  <span className="dm-badge">{billing.plan === "pro" ? "Pro" : billing.plan === "start" ? "Start" : "Free"}</span>
                 </div>
                 <div className="dm-account-actions">
                   <button type="button" onClick={() => navigate("profile", "basic")}>내 프로필 <span>{basicProfile.stage}</span></button>
@@ -2684,7 +2697,7 @@ export default function Home() {
               }}
             >
               <span className="dm-avatar" aria-hidden="true">{accountInitial}</span>
-              <span><strong>{accountDisplayName}</strong><small>{workspaceState === "loading" ? "계정 확인 중" : workspaceState === "auth" ? "로그인하고 작업 저장하기" : `${isPro ? "Pro" : "Free"} · AI ${aiCredits}`}</small></span>
+              <span><strong>{accountDisplayName}</strong><small>{workspaceState === "loading" ? "계정 확인 중" : workspaceState === "auth" ? "로그인하고 작업 저장하기" : `${billing.plan === "pro" ? "Pro" : billing.plan === "start" ? "Start" : "Free"} · AI ${aiCredits}`}</small></span>
               <b aria-hidden="true">{accountOpen ? "⌄" : "⌃"}</b>
             </button>
           </div>
@@ -2799,7 +2812,7 @@ export default function Home() {
               <div className="dm-account-summary">
                 <span className="dm-avatar" aria-hidden="true">{accountInitial}</span>
                 <div><strong>{accountDisplayName}</strong><small>{accountMeta}</small></div>
-                <span className="dm-badge">{isPro ? "Pro" : "Free"}</span>
+                <span className="dm-badge">{billing.plan === "pro" ? "Pro" : billing.plan === "start" ? "Start" : "Free"}</span>
               </div>
               <div className="dm-account-actions">
                 <button type="button" onClick={() => navigate("profile", "basic")}>내 프로필 <span>{basicProfile.stage}</span></button>
@@ -2981,7 +2994,7 @@ export default function Home() {
               navigate={navigate}
             />
           ) : null}
-          {view === "notificationSettings" ? <NotificationSettingsView preferences={notificationPreferences} setPreferences={setNotificationPreferences} isPro={isPro} emailProviderConnected={emailProviderConnected} automationStatus={automationStatus} save={saveNotificationSettings} sendTestEmail={sendTestEmail} navigate={navigate} /> : null}
+          {view === "notificationSettings" ? <NotificationSettingsView preferences={notificationPreferences} setPreferences={setNotificationPreferences} plan={billing.plan} emailProviderConnected={emailProviderConnected} automationStatus={automationStatus} save={saveNotificationSettings} sendTestEmail={sendTestEmail} navigate={navigate} /> : null}
           {view === "payment" ? <PaymentView billing={billing} checkout={startCheckout} requestRefund={requestRefundAction} navigate={navigate} /> : null}
           {view === "operations" ? <TabbedOperationsView payload={operations} state={operationsState} refresh={loadOperations} review={reviewAnnouncementAction} bulkReview={bulkReviewAnnouncementAction} manageCoupon={manageCouponAction} resolveRefund={resolveRefundAction} manageCommunity={manageCommunityAction} manageSupport={manageSupportAction} runAutomation={runAutomationAction} sendTestEmail={sendTestEmail} /> : null}
 
@@ -4276,7 +4289,7 @@ function PlanView({ billing, checkout, redeemPromotion, navigate }: { billing: B
       price: 0,
       credits: "가입 10 + 매일 1",
       description: "공고 탐색과 직접 작성부터 가볍게 시작",
-      features: ["사업비 편성·서류 카드 직접 작성", "AI 사업 프로필 1개", "무료 크레딧 잔액 최대 10", "기본 맞춤 추천·웹 알림"],
+      features: ["사업비 편성·서류 카드 직접 작성", "AI 프로필 버전 최대 1개", "무료 크레딧 잔액 최대 10", "기본 맞춤 추천·웹 알림"],
       featured: false,
     },
     {
@@ -4285,7 +4298,7 @@ function PlanView({ billing, checkout, redeemPromotion, navigate }: { billing: B
       price: planProducts.start?.amount ?? 19_900,
       credits: `30일 이용권마다 ${planProducts.start?.credits ?? 120} 크레딧`,
       description: "지원사업 한 건을 끝까지 준비하는 창업자",
-      features: ["AI 초안·피드백 약 1건 분량", "AI 사업 프로필 최대 2개", "맞춤 공고 이메일 요약", "D-7·D-3·D-1 준비 알림"],
+      features: ["AI 초안·피드백 약 1건 분량", "AI 프로필 버전 최대 2개", "매일 맞춤 공고 이메일", "D-7·D-3·D-1 준비 알림"],
       featured: true,
     },
     {
@@ -4294,13 +4307,15 @@ function PlanView({ billing, checkout, redeemPromotion, navigate }: { billing: B
       price: planProducts.pro?.amount ?? 39_900,
       credits: `30일 이용권마다 ${planProducts.pro?.credits ?? 360} 크레딧`,
       description: "여러 사업과 공고를 동시에 관리하는 팀",
-      features: ["AI 초안·피드백 약 3건 분량", "AI 사업 프로필 최대 5개", "맞춤 공고 감지 즉시 이메일", "D-14·7·3·1 진단·누락 확인"],
+      features: ["AI 초안·피드백 약 3건 분량", "AI 프로필 버전 최대 5개", "맞춤 공고·변경 감지 이메일", "D-14·7·3·1·당일 진단"],
       featured: false,
     },
   ] as const;
   const providerName = "PortOne";
   const checkoutNote = billing.readiness.mode === "live-ready"
     ? `${providerName} 운영 결제가 연결되어 있습니다. Start·Pro는 자동결제가 아닌 수동 갱신형 30일 이용권이며, 만료 7일·3일·1일 전에 이메일로 안내합니다.`
+    : billing.readiness.mode === "live-admin-test"
+      ? `${providerName} 운영 실결제 관리자 시험 모드입니다. 실제 과금되며 일반 사용자 결제는 차단되어 있습니다.`
     : billing.readiness.mode === "sandbox-ready"
       ? `현재 ${providerName} 테스트 결제로 크레딧과 30일 이용권 구매 흐름을 확인할 수 있습니다. 실제 과금은 발생하지 않습니다.`
       : "결제 기능은 운영 심사 후 열립니다. 요금과 크레딧 정책은 지금부터 확인할 수 있습니다.";
@@ -4380,11 +4395,52 @@ function PlanFeature({ title, description }: { title: string; description: strin
   return <div className="dm-plan-feature"><span aria-hidden="true">✓</span><span><strong>{title}</strong><small>{description}</small></span></div>;
 }
 
-function NotificationSettingsView({ preferences, setPreferences, isPro, emailProviderConnected, automationStatus, save, sendTestEmail, navigate }: { preferences: NotificationPreferences; setPreferences: (value: NotificationPreferences) => void; isPro: boolean; emailProviderConnected: boolean; automationStatus: AutomationStatus | null; save: () => void; sendTestEmail: () => void; navigate: (view: View) => void }) {
+function NotificationSettingsView({ preferences, setPreferences, plan, emailProviderConnected, automationStatus, save, sendTestEmail, navigate }: { preferences: NotificationPreferences; setPreferences: (value: NotificationPreferences) => void; plan: string; emailProviderConnected: boolean; automationStatus: AutomationStatus | null; save: () => void; sendTestEmail: () => void; navigate: (view: View) => void }) {
+  const isPro = plan === "pro";
+  const isPaid = plan === "start" || isPro;
+  const toggleDay = (day: number) => setPreferences({
+    ...preferences,
+    reminderDays: preferences.reminderDays.includes(day)
+      ? preferences.reminderDays.filter((item) => item !== day)
+      : [...preferences.reminderDays, day],
+  });
+  const lastRun = automationStatus?.runs[0];
+  return <div className="dm-settings-list">
+    <section className="dm-plan-section">
+      <div className="dm-plan-section-head"><div><h2>기본 알림</h2><p>무료 요금제에서도 웹 알림과 D-7·D-1 준비 진단을 받을 수 있어요.</p></div><span className="dm-badge">Free</span></div>
+      <Toggle label="웹 알림 사용" checked={preferences.webEnabled} onChange={(checked) => setPreferences({ ...preferences, webEnabled: checked })} />
+      <Toggle label="D-7 준비 상태 확인" checked={preferences.reminderDays.includes(7)} onChange={() => toggleDay(7)} />
+      <Toggle label="D-1 최종 확인" checked={preferences.reminderDays.includes(1)} onChange={() => toggleDay(1)} />
+      <Toggle label={`이메일 알림${emailProviderConnected ? "" : " · 공급자 연결 대기"}`} checked={preferences.emailEnabled} disabled={!emailProviderConnected} onChange={(checked) => setPreferences({ ...preferences, emailEnabled: checked })} />
+      {emailProviderConnected ? <button className="dm-button dm-test-email" type="button" onClick={sendTestEmail}>내 계정으로 시험 메일 보내기</button> : <p className="dm-provider-note">Resend 발신 도메인과 API 키를 연결하면 여기서 실제 수신까지 시험할 수 있습니다.</p>}
+    </section>
+    <section className="dm-plan-section">
+      <div className="dm-plan-section-head"><div><h2>지능형 공고 비서</h2><p>Start는 맞춤 공고와 D-3 알림, Pro는 변경 감지와 D-14·당일 알림까지 제공합니다.</p></div><span className="dm-badge">{isPro ? "Pro" : isPaid ? "Start" : "유료"}</span></div>
+      <Toggle label={isPro ? "맞춤 공고·공고 변경 감지" : "매일 맞춤 공고 알림"} checked={preferences.realtimeProEnabled} disabled={!isPaid} onChange={(checked) => setPreferences({ ...preferences, realtimeProEnabled: checked })} />
+      <Toggle label="D-14 준비 시작" checked={preferences.reminderDays.includes(14)} disabled={!isPro} onChange={() => toggleDay(14)} />
+      <Toggle label="D-3 누락 항목 확인" checked={preferences.reminderDays.includes(3)} disabled={!isPaid} onChange={() => toggleDay(3)} />
+      <Toggle label="D-day 제출 확인" checked={preferences.reminderDays.includes(0)} disabled={!isPro} onChange={() => toggleDay(0)} />
+      <PlanFeature title="준비 상태 진단" description="체크리스트·미작성 문항·사업비 입력 상태를 알림에 함께 표시" />
+      {!isPaid ? <button className="dm-primary-button" type="button" onClick={() => navigate("plan")}>Start·Pro 공고 비서 보기</button> : null}
+    </section>
+    <section className="dm-plan-section">
+      <div className="dm-plan-section-head"><div><h2>운영 연결 상태</h2><p>공고 수집 → 추천 재계산 → 이용권 만료 → 알림 생성이 하루 한 번 실행됩니다.</p></div><span className={lastRun?.status === "completed" ? "dm-runtime-badge is-openai" : "dm-runtime-badge"}>{lastRun?.status === "completed" ? "정상 실행" : "설정 확인"}</span></div>
+      <div className="dm-operation-grid"><OperationState label="K-Startup API" ready={Boolean(automationStatus?.configured.kstartup)} /><OperationState label="기업마당 API" ready={Boolean(automationStatus?.configured.bizinfo)} /><OperationState label="AI 분석" ready={Boolean(automationStatus?.configured.ai)} /><OperationState label="이메일 발송" ready={Boolean(automationStatus?.configured.email)} /><OperationState label="매일 오전 9시 자동 실행" ready={Boolean(automationStatus?.configured.automation)} /><OperationState label="Google·카카오 SSO" ready={Boolean(automationStatus?.configured.google && automationStatus?.configured.kakao)} /></div>
+      {automationStatus?.schedule ? <p className="dm-operation-summary">다음 실행 {new Date(automationStatus.schedule.nextRunAt).toLocaleString("ko-KR")} · {automationStatus.schedule.timeZone}</p> : null}
+      {lastRun ? <p className="dm-operation-summary">최근 {new Date(lastRun.startedAt).toLocaleString("ko-KR")} · 공고 {lastRun.insertedCount}건 추가 · 추천 {lastRun.recommendationCount}건 · 알림 {lastRun.notificationCount}건</p> : <p className="dm-provider-note">첫 자동 실행 전입니다. 자동 실행 보안 키를 배포 환경에 등록하면 일정이 활성화됩니다.</p>}
+    </section>
+    <button className="dm-primary-button" type="button" onClick={save}>알림 설정 저장</button>
+  </div>;
+}
+
+/* Previous single-tier notification panel retained temporarily for source-history comparison.
+function LegacyNotificationSettingsView({ preferences, setPreferences, plan, emailProviderConnected, automationStatus, save, sendTestEmail, navigate }: { preferences: NotificationPreferences; setPreferences: (value: NotificationPreferences) => void; plan: string; emailProviderConnected: boolean; automationStatus: AutomationStatus | null; save: () => void; sendTestEmail: () => void; navigate: (view: View) => void }) {
   const toggleDay = (day: number) => setPreferences({ ...preferences, reminderDays: preferences.reminderDays.includes(day) ? preferences.reminderDays.filter((item) => item !== day) : [...preferences.reminderDays, day] });
+  const isPro = plan === "pro";
   const lastRun = automationStatus?.runs[0];
   return <div className="dm-settings-list"><section className="dm-plan-section"><div className="dm-plan-section-head"><div><h2>기본 알림</h2><p>무료 요금제에서도 웹 알림과 D-7·D-1 준비 진단을 받을 수 있어요.</p></div><span className="dm-badge">Free</span></div><Toggle label="웹 알림 사용" checked={preferences.webEnabled} onChange={(checked) => setPreferences({ ...preferences, webEnabled: checked })} /><Toggle label="D-7 준비 상태 확인" checked={preferences.reminderDays.includes(7)} onChange={() => toggleDay(7)} /><Toggle label="D-1 최종 확인" checked={preferences.reminderDays.includes(1)} onChange={() => toggleDay(1)} /><Toggle label={`이메일 알림${emailProviderConnected ? "" : " · 공급자 연결 대기"}`} checked={preferences.emailEnabled} disabled={!emailProviderConnected} onChange={(checked) => setPreferences({ ...preferences, emailEnabled: checked })} />{emailProviderConnected ? <button className="dm-button dm-test-email" type="button" onClick={sendTestEmail}>내 계정으로 시험 메일 보내기</button> : <p className="dm-provider-note">Resend 발신 도메인과 API 키를 연결하면 여기서 실제 수신까지 시험할 수 있습니다.</p>}</section><section className="dm-plan-section"><div className="dm-plan-section-head"><div><h2>지능형 공고 비서</h2><p>마감 전 준비 상태와 공고 변경을 더 촘촘하게 확인합니다.</p></div><span className="dm-badge">Pro</span></div><Toggle label="맞춤 공고·공고 변경 감지" checked={preferences.realtimeProEnabled} disabled={!isPro} onChange={(checked) => setPreferences({ ...preferences, realtimeProEnabled: checked })} /><Toggle label="D-14 준비 시작" checked={preferences.reminderDays.includes(14)} disabled={!isPro} onChange={() => toggleDay(14)} /><Toggle label="D-3 누락 항목 확인" checked={preferences.reminderDays.includes(3)} disabled={!isPro} onChange={() => toggleDay(3)} /><Toggle label="D-day 제출 확인" checked={preferences.reminderDays.includes(0)} disabled={!isPro} onChange={() => toggleDay(0)} /><PlanFeature title="준비 상태 진단" description="체크리스트·미작성 문항·사업비 입력 상태를 알림에 함께 표시" />{!isPro ? <button className="dm-primary-button" type="button" onClick={() => navigate("plan")}>공고 비서 Pro 보기</button> : null}</section><section className="dm-plan-section"><div className="dm-plan-section-head"><div><h2>운영 연결 상태</h2><p>공고 수집 → 추천 재계산 → 알림 생성이 하루 한 번 실행됩니다.</p></div><span className={lastRun?.status === "completed" ? "dm-runtime-badge is-openai" : "dm-runtime-badge"}>{lastRun?.status === "completed" ? "정상 실행" : "설정 확인"}</span></div><div className="dm-operation-grid"><OperationState label="K-Startup API" ready={Boolean(automationStatus?.configured.kstartup)} /><OperationState label="기업마당 API" ready={Boolean(automationStatus?.configured.bizinfo)} /><OperationState label="AI 분석" ready={Boolean(automationStatus?.configured.ai)} /><OperationState label="이메일 발송" ready={Boolean(automationStatus?.configured.email)} /><OperationState label="매일 오전 9시 자동 실행" ready={Boolean(automationStatus?.configured.automation)} /><OperationState label="Google·카카오 SSO" ready={Boolean(automationStatus?.configured.google && automationStatus?.configured.kakao)} /></div>{automationStatus?.schedule ? <p className="dm-operation-summary">다음 실행 {new Date(automationStatus.schedule.nextRunAt).toLocaleString("ko-KR")} · {automationStatus.schedule.timeZone}</p> : null}{lastRun ? <p className="dm-operation-summary">최근 {new Date(lastRun.startedAt).toLocaleString("ko-KR")} · 공고 {lastRun.insertedCount}건 추가 · 추천 {lastRun.recommendationCount}건 · 알림 {lastRun.notificationCount}건</p> : <p className="dm-provider-note">첫 자동 실행 전입니다. 자동 실행 보안 키를 배포 환경에 등록하면 일정이 활성화됩니다.</p>}</section><button className="dm-primary-button" type="button" onClick={save}>알림 설정 저장</button></div>;
 }
+*/
 
 function OperationState({ label, ready }: { label: string; ready: boolean }) {
   return <div><span>{label}</span><b className={ready ? "is-ready" : ""}>{ready ? "연결됨" : "키 등록 대기"}</b></div>;
@@ -4396,8 +4452,10 @@ function Toggle({ label, checked, disabled = false, onChange }: { label: string;
 
 function billingStatusLabel(status: string) {
   if (status === "paid") return "결제 완료";
+  if (status === "canceled") return "전체 취소";
+  if (status === "partial_canceled") return "부분 취소";
   if (status === "granted") return "적용 완료";
-  if (status === "failed" || status === "aborted" || status === "canceled") return "결제 실패";
+  if (status === "failed" || status === "aborted") return "결제 실패";
   if (status === "expired") return "시간 만료";
   if (status === "processing") return "승인 반영 중";
   return "결제 대기";
@@ -4409,15 +4467,18 @@ function PaymentView({ billing, checkout, requestRefund, navigate }: { billing: 
   const creditProducts = billing.products.filter((product) => product.plan === null);
   const providerName = "PortOne";
   const isLive = billing.readiness.mode === "live-ready";
+  const isAdminLiveTest = billing.readiness.mode === "live-admin-test";
   const isSandbox = billing.readiness.mode === "sandbox-ready";
   const checkoutDescription = isLive
     ? `${providerName} 운영 결제가 연결되어 아래 결제는 실제로 과금됩니다.`
+    : isAdminLiveTest
+      ? `${providerName} 관리자 실결제 시험 모드입니다. 실제 과금되며 일반 사용자 결제는 차단되어 있습니다.`
     : isSandbox
       ? `${providerName} 샌드박스 결제창을 열 수 있습니다. 실제 과금은 발생하지 않습니다.`
-      : billing.readiness.mode === "key-mismatch"
-        ? "샌드박스와 운영 키 환경이 일치하지 않아 결제를 차단했습니다."
+      : billing.readiness.mode === "live-restricted"
+        ? "관리자 실결제 검증 중이라 일반 사용자 결제는 잠시 차단되어 있습니다."
         : "현재 결제를 이용할 수 없습니다. 잠시 후 다시 확인해주세요.";
-  const checkoutBadge = isLive ? "운영 결제" : isSandbox ? "테스트 결제" : billing.readiness.mode === "key-mismatch" ? "점검 중" : "이용 불가";
+  const checkoutBadge = isLive ? "운영 결제" : isAdminLiveTest ? "관리자 실결제 시험" : isSandbox ? "테스트 결제" : billing.readiness.mode === "live-restricted" ? "검증 중" : "이용 불가";
   const refundableEvents = billing.history.filter((item) => item.status === "paid"
     && item.creditsDelta > 0
     && item.metadata.provider === "portone_v2");
