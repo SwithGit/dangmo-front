@@ -1,4 +1,4 @@
-import type { RegionAnnouncementsPayload, RegionInsightResponse, RegionsPayload } from "./region-map-types";
+import type { RegionAnnouncementsPayload, RegionalEvidenceStatus, RegionInsightResponse, RegionsPayload } from "./region-map-types";
 
 async function json<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({})) as { error?: string } & T;
@@ -17,6 +17,10 @@ export async function loadRegions(parentCode?: string) {
 
 export async function loadRegionAnnouncements(regionCode: string, sort: string) {
   return json<RegionAnnouncementsPayload>(await fetch(`/api/regions/${encodeURIComponent(regionCode)}/announcements?page=1&pageSize=50&sort=${encodeURIComponent(sort)}`, { headers: { Accept: "application/json" } }));
+}
+
+export async function loadRegionalEvidenceStatus(regionCode: string) {
+  return json<RegionalEvidenceStatus>(await fetch(`/api/regions/${encodeURIComponent(regionCode)}/evidence-status`, { headers: { Accept: "application/json" } }));
 }
 
 export async function requestRegionInsight(regionCode: string, announcementId: string) {

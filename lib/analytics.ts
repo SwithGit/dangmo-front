@@ -1,4 +1,4 @@
-export const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-94NKHRK9ZZ";
+export const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || "";
 
 export type AnalyticsParameter = string | number | boolean | undefined;
 
@@ -10,10 +10,12 @@ declare global {
 }
 
 export function trackEvent(name: string, parameters: Record<string, AnalyticsParameter> = {}) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !GA_MEASUREMENT_ID) return;
+  const blockedKeys = new Set(["email", "user_id", "announcement_id", "proposal_angle_id", "run_id", "search_term", "business_name", "document_content", "announcement_title"]);
+  const safeParameters = Object.fromEntries(Object.entries(parameters).filter(([key, value]) => !blockedKeys.has(key) && (typeof value === "string" ? value.length <= 80 : true)));
   window.dataLayer = window.dataLayer ?? [];
   const gtag = window.gtag ?? ((...args: unknown[]) => window.dataLayer?.push(args));
-  gtag("event", name, parameters);
+  gtag("event", name, safeParameters);
 }
 
 export function trackPageView(path: string, title: string, menuName?: string) {
@@ -34,7 +36,7 @@ export function rememberLoginMethod(method: "google" | "kakao") {
   } catch {
     // Analytics must never block the login flow.
   }
-  trackEvent("login_start", { method });
+  trackEvent("login", { method, stage: "started" });
 }
 
 export function consumeLoginMethod() {

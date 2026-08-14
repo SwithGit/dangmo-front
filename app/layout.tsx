@@ -55,13 +55,13 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
-        <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} />
+        {GA_MEASUREMENT_ID ? <><script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} />
         <script
           id="dangmo-ga4"
           dangerouslySetInnerHTML={{
             __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}window.gtag=gtag;gtag('js',new Date());gtag('config','${GA_MEASUREMENT_ID}',{send_page_view:false,allow_google_signals:false,allow_ad_personalization_signals:false});`,
           }}
-        />
+        /></> : null}
       </head>
       <body>
         <AnalyticsPageTracker />

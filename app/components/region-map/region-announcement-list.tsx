@@ -11,7 +11,7 @@ function AnnouncementButtons({ announcements, selectedId, onSelect, badge }: {
   badge?: string;
 }) {
   return announcements.map((announcement) => <button className={selectedId === announcement.id ? "is-selected" : ""} type="button" key={announcement.id} onClick={() => onSelect(announcement)}>
-    <span><b>{badge ?? announcement.category}</b><small>{announcement.institution}</small></span>
+    <span><b>{badge ?? announcement.regionLimitLabel ?? announcement.category}</b><small>{announcement.institution}</small></span>
     <strong>{announcement.title}</strong>
     <span><small>{announcement.target}</small><em>{dateLabel(announcement.applyEndAt)} 마감</em></span>
   </button>);

@@ -29,6 +29,7 @@ export type RegionalAnnouncement = {
   scope: "nationwide" | "province" | "municipality" | "unsupported";
   regionCodes: string[];
   previewData: boolean;
+  regionLimitLabel?: string | null;
 };
 
 export type RegionAnnouncementsPayload = {
@@ -41,22 +42,43 @@ export type RegionAnnouncementsPayload = {
   closestDeadline: string | null;
 };
 
+export type RegionalDataState = "unconfigured" | "collecting" | "empty" | "insufficient" | "ready" | "preview" | "error";
+
+export type RegionalEvidenceStatus = {
+  analysisUnit: { id: string; name: string; kind: "region" | "municipality"; primaryRegionCode: string; memberRegionCodes: string[] };
+  dataState: RegionalDataState;
+  activeSourceCount: number;
+  successfulSourceCount: number;
+  failedSourceCount: number;
+  documentCount: number;
+  publisherCount: number;
+  officialDocumentCount: number;
+  recentDocumentCount: number;
+  directDocumentCount: number;
+  missing: string[];
+  lastCollectedAt: string | null;
+  lastPublishedAt: string | null;
+  lastError: string | null;
+  previewData: boolean;
+};
+
 export type RegionInsight = {
   id: string;
   region: { code: string; name: string };
-  analysisUnit?: { id: string; name: string; kind: "metro" | "municipality"; memberRegionCodes: string[] };
+  analysisUnit?: { id: string; name: string; kind: "region" | "municipality"; primaryRegionCode?: string; memberRegionCodes: string[] };
   announcement: { id: string; title: string };
   status: "ready" | "insufficient_evidence" | "analysis_failed";
   summary: string;
-  issues: Array<{ id?: string; title: string; summary: string; scope?: "unit_wide" | "district_case" | "province_context"; trend?: "rising" | "stable" | "declining" | "mixed"; score?: number; confidence: "high" | "medium" | "low"; limitations?: string[]; evidenceIds: string[] }>;
+  issues: Array<{ id?: string; title: string; summary: string; scope?: "unit_wide" | "local_case" | "province_context"; trend?: "rising" | "stable" | "declining" | "mixed"; score?: number; confidence: "high" | "medium" | "low"; limitations?: string[]; evidenceIds: string[] }>;
   proposalAngles: Array<{ id: string; title: string; regionalProblem?: string; proposedSolution?: string; announcementFit?: string; businessFit?: string; rationale: string; beneficiaries: string[]; executionPlan?: string[]; suggestedMetrics: string[]; cautions: string[]; evidenceIds: string[]; fitScore?: number }>;
-  evidence: Array<{ id: string; title: string; publisher: string; sourceType: string; publishedAt: string; sourceUrl: string; summary?: string; scope?: "unit_wide" | "district_case" | "province_context"; detailRegionLabel?: string | null; regionRelevanceScore?: number; sourceQualityScore?: number; previewData?: boolean }>;
+  evidence: Array<{ id: string; title: string; publisher: string; sourceType: string; publishedAt: string; sourceUrl: string; summary?: string; scope?: "unit_wide" | "local_case" | "province_context"; detailRegionLabel?: string | null; regionRelevanceScore?: number; sourceQualityScore?: number; previewData?: boolean; extractedFacts?: string[] }>;
   readiness?: { ready: boolean; documentCount: number; publisherCount: number; officialDocumentCount: number; recentDocumentCount: number; directDocumentCount: number; missing: string[] };
   lookbackMonths: number;
   analyzedAt: string;
   expiresAt: string;
   previewData: boolean;
   uncertaintyNotice: string;
+  dataState?: RegionalDataState;
 };
 
 export type RegionInsightResponse = {

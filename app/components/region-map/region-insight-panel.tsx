@@ -7,7 +7,7 @@ const sourceTypeLabel: Record<string, string> = {
   official: "공식자료", plan: "정책·계획", council: "의회자료", statistics: "공공통계",
   finance: "재정자료", budget: "예산자료", news: "뉴스",
 };
-const scopeLabel = { unit_wide: "분석 지역 전체", district_case: "내부 지역 사례", province_context: "도 전체 배경" } as const;
+const scopeLabel = { unit_wide: "분석 지역 전체", local_case: "내부 지역 사례", province_context: "경기도 전체 배경" } as const;
 const trendLabel = { rising: "증가", stable: "유지", declining: "감소", mixed: "혼합" } as const;
 
 export function RegionInsightPanel({ result, announcement, onWrite }: {
@@ -20,7 +20,7 @@ export function RegionInsightPanel({ result, announcement, onWrite }: {
   const analysisUnit = insight.analysisUnit ?? {
     id: `legacy:${insight.region.code}`,
     name: insight.region.name,
-    kind: insight.region.code.length === 2 ? "metro" as const : "municipality" as const,
+    kind: insight.region.code.length === 2 ? "region" as const : "municipality" as const,
     memberRegionCodes: [insight.region.code],
   };
   const readiness = insight.readiness ?? {
@@ -41,10 +41,10 @@ export function RegionInsightPanel({ result, announcement, onWrite }: {
     </header>
 
     <div className="dm-region-analysis-meta">
-      <span><small>분석 단위</small>{analysisUnit.kind === "metro" ? "광역시 전체" : "시·군"}</span>
+      <span><small>분석 단위</small>{analysisUnit.kind === "region" ? "시·도 전체" : "경기 시·군"}</span>
       <span><small>분석 기준일</small>{new Date(insight.analyzedAt).toLocaleString("ko-KR")}</span>
       <span><small>자료 범위</small>뉴스 {insight.lookbackMonths}개월 · 정책/통계 24개월</span>
-      <span><small>데이터 상태</small>{insight.previewData ? "개발용 미리보기" : "수집된 운영 자료"}</span>
+      <span><small>데이터 상태</small>{insight.dataState === "ready" ? "운영 자료 준비됨" : insight.dataState === "preview" || insight.previewData ? "개발용 미리보기" : "근거 준비 중"}</span>
     </div>
     <aside className="dm-region-uncertainty"><strong>불확실성 안내 · 근거 범위</strong><p>{insight.uncertaintyNotice}</p></aside>
 
@@ -79,8 +79,9 @@ export function RegionInsightPanel({ result, announcement, onWrite }: {
       <span>{sourceTypeLabel[evidence.sourceType] ?? evidence.sourceType} · {scopeLabel[evidence.scope ?? "unit_wide"]}</span>
       <strong>{evidence.title}</strong>
       {evidence.summary && <p>{evidence.summary}</p>}
+      {(evidence.extractedFacts?.length ?? 0) > 0 && <p><b>핵심 사실</b> {evidence.extractedFacts?.slice(0, 3).join(" · ")}</p>}
       <small>{evidence.publisher} · {new Date(evidence.publishedAt).toLocaleDateString("ko-KR")}{evidence.detailRegionLabel ? ` · ${evidence.detailRegionLabel}` : ""} · 원문 보기 ↗</small>
     </a>)}</div></section>
-    <footer><p>선택한 방향과 근거 ID만 제안서 작성 AI에 전달됩니다. 신청 자격과 원문 수치는 제출 전에 다시 확인하세요.</p><button className="dm-primary-button" type="button" disabled={!selected || blocked} onClick={() => selected && onWrite({ regionCode: insight.region.code, regionInsightId: insight.id, proposalAngleId: selected.id, announcementId: insight.announcement.id, regionName: analysisUnit.name, proposalAngleTitle: selected.title }, announcement)}>이 방향으로 제안서 작성하기</button></footer>
+    <footer><p>{blocked || !selected ? "준비된 제안 방향이 없어 작성 화면으로 이동할 수 없습니다." : "선택한 방향과 근거 ID만 제안서 작성 AI에 전달됩니다. 신청 자격과 원문 수치는 제출 전에 다시 확인하세요."}</p><button className="dm-primary-button" type="button" disabled={!selected || blocked} onClick={() => selected && onWrite({ regionCode: insight.region.code, regionInsightId: insight.id, proposalAngleId: selected.id, announcementId: insight.announcement.id, regionName: analysisUnit.name, proposalAngleTitle: selected.title }, announcement)}>이 방향으로 제안서 작성하기</button></footer>
   </section>;
 }

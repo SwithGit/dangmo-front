@@ -64,13 +64,13 @@ test("map exploration is routable, accessible, and keeps nationwide counts separ
   assert.match(page, /path: "\/app\/map"/);
   assert.match(view, /korea-overview\.geojson/);
   assert.match(view, /DETAIL_AREA_ASSETS/);
-  assert.match(view, /jeju-municipalities\.geojson/);
-  assert.match(view, /gangwon-municipalities\.geojson/);
-  assert.match(view, /jeonnam-gwangju-municipalities\.geojson/);
+  assert.doesNotMatch(view, /jeju-municipalities\.geojson/);
+  assert.doesNotMatch(view, /gangwon-municipalities\.geojson/);
+  assert.doesNotMatch(view, /jeonnam-gwangju-municipalities\.geojson/);
   assert.match(view, /aggregateRegion=\{selectedRegion\}/);
   assert.match(view, /dm-region-map-single/);
   assert.match(view, /gyeonggi-municipalities\.geojson/);
-  assert.match(view, /광역시는 전체 단위로, 도 지역은 시·군 단위/);
+  assert.match(view, /경기도만 시·군을 선택하고/);
   assert.match(view, /전체 공고 \{area\.regionalOpenCount\}건 보기/);
   assert.match(view, /loadRegionAnnouncements\(region\.code, sort\)/);
   assert.match(view, /목록으로 보기/);
@@ -84,4 +84,24 @@ test("map exploration is routable, accessible, and keeps nationwide counts separ
   assert.match(insight, /불확실성 안내/);
   assert.match(insight, /AI 크레딧/);
   assert.match(api, /\/api\/regions/);
+  assert.match(api, /evidence-status/);
+});
+
+test("GA4, noindex and regional SEO are environment and readiness gated", async () => {
+  const [analytics, layout, appLayout, sitemap, regionPage, publicRegions] = await Promise.all([
+    readFile(new URL("../lib/analytics.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/sitemap.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/regions/[...slug]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/public-regions.ts", import.meta.url), "utf8"),
+  ]);
+  assert.doesNotMatch(analytics, /G-94NKHRK9ZZ/);
+  assert.match(layout, /GA_MEASUREMENT_ID \?/);
+  assert.match(appLayout, /index: false/);
+  assert.match(sitemap, /indexablePublicRegions/);
+  assert.match(regionPage, /dataState === "ready"/);
+  assert.match(regionPage, /canonical/);
+  assert.match(publicRegions, /publishable/);
+  await assert.rejects(access(new URL("../public/sitemap.xml", import.meta.url)));
 });
